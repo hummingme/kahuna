@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# copy this file to scripts/settings-local.sh
+# to overwrite or expand any variables defined in scripts/settings.sh
+
+# FIREFOX="firefox"                   # executable, add path if not in PATH
+# FIREFOX_PROFILE="kahuna-dev"
+# CHROMIUM="google-chrome"        
+# CHROMIUM_PROFILE="~/.config/google-chrome/Profile 1"
+
+# ESBUILD_PARAMS+=()
+
+# WEBEXT_OPTIONS=(
+#     "--source-dir" "$BUILD"
+#     "--keep-profile-changes"
+#     "--start-url" "$URL"   
+# )
+# if [ "$TARGET" = "firefox" ]; then
+#     WEBEXT_OPTIONS+=(
+#         "--watch-file" "$BUILD/background.js"
+#         "--arg=\"--devtools\""
+#         "--firefox" "$FIREFOX"
+#         "--firefox-profile" "$FIREFOX_PROFILE"
+#     )
+# elif [ "$TARGET" = "chromium" ]; then
+#     WEBEXT_OPTIONS+=(
+#     "--watch-file" "$BUILD/background_worker.js"
+#     "--target" "$TARGET"
+#     "--args=\"--auto-open-devtools-for-tabs\""
+#     "--chromium-binary" "$CHROMIUM"
+#     "--chromium-profile" "$CHROMIUM_PROFILE"
+#     )
+# fi;
+
+# HTTP_SERVER_OPTIONS+=(
+#     "--ssl"
+#     "--cert" "$ROOT/config/ssl/localhost-cert.pem"
+#     "--key" "$ROOT/config/ssl/localhost-key.pem"
+#     "--header" "Content-Security-Policy: script-src 'self'"
+# )

@@ -1,0 +1,46 @@
+{
+    "name": "kahuna",
+    "version": "1.0",
+    "description": "Browser-extension to view, edit, manage, export and import IndexedDB databases.",
+    "author": "Lutz Brückner <dev@kahuna.rocks>",
+    "license": "MPL-2.0",
+    "private":true,
+    "type": "module",
+    "repository": "github:hummingme/kahuna",
+    "homepage": "https://github.com/hummingme/kahuna/README.md",
+    "bugs":"https://github.com/hummingme/kahuna/issues",
+    "keywords": [
+        "indexeddb",
+        "databases",
+        "webextension",
+        "browser-extension",
+        "browser-addon",
+        "firefox",
+        "chrome"
+    ],
+    "scripts": {
+        "build": "scripts/build.sh",
+        "release": "scripts/release.sh",
+        "dev:firefox": "scripts/develop.sh firefox",
+        "dev:chromium": "scripts/develop.sh chromium",
+        "lint": "eslint 'src/**/*.js'"
+    },
+    "dependencies": {
+        "dexie": "^4.0.0",
+        "dexie-export-import": "^4.1.1",
+        "lit": "^3.0.0",
+        "lit-html": "^3.0.0",
+        "@open-wc/lit-helpers": "^0.7.0",
+        "@tabler/icons": "^3.0.0"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9",
+        "esbuild": "^0.25",
+        "eslint": "^9",
+        "eslint-config-prettier": "^10.0",
+        "globals": "^15.4.0",
+        "http-server": "github:http-party/http-server",
+        "onchange": "^7.1.0",
+        "prettier": "3.4.2"
+    }
+}

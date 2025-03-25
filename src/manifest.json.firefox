@@ -1,0 +1,53 @@
+{
+    "name": "Kahuna",
+    "version": "1.0",
+    "description": "Browse, edit and manage IndexedDB databases.",
+    "author":"Lutz Brückner",
+    "homepage_url":"https://github.com/hummingme/kahuna#readme",
+    "manifest_version": 2,
+    "icons": {
+        "48": "icons/kahuna.svg",
+        "96": "icons/kahuna.svg"
+    },
+    "background": {
+        "scripts": ["background.js"]
+    },
+    "content_scripts": [{
+        "matches": ["*://*/*"],
+        "js": ["contentscript.js"]
+    }],
+    "permissions": [
+        "storage",
+        "*://*/*"
+    ],
+    "browser_action": {
+        "default_icon": {
+            "16": "icons/kahuna-16.png",
+            "32": "icons/kahuna-32.png",
+            "48": "icons/kahuna-48.png"
+        },  
+        "default_title": "Kahuna: no databases found"
+    },
+    "commands": {
+        "_execute_browser_action": {
+            "suggested_key": {
+                "default": "Ctrl+Period",
+                "mac": "Command+Period"
+            }
+        }
+    },
+    "web_accessible_resources": [
+        "kahuna.js",
+        "code_worker.js",
+        "contentscript_worker.js",
+        "icons/kahuna.svg",
+        "static/kahuna.css",
+        "static/icons.svg"
+    ],
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "dev@kahuna.rocks",
+            "strict_min_version": "128.0"
+        }
+    }
+}
