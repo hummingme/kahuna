@@ -3,7 +3,7 @@
 Kahuna is a browser extension for Firefox and Chromium based browsers to manage IndexedDB databases. It can be used to create databases and modify their structure, as well as to view, query, edit, import and export the data they contain.
 
 <p align="center">
-  <img alt="Kahuna at work" src="https://hummingme.github.io/kahuna-docs/v1/assets/screenshots/kahuna-at-work-1920x1200.png">
+  <img alt="Kahuna at work" src="https://hummingme.github.io/kahuna-docs/assets/screenshots/kahuna-at-work-1920x1200.png">
 </p>
 
 ## Features
@@ -18,10 +18,18 @@ Kahuna is a browser extension for Firefox and Chromium based browsers to manage 
 * enables the entry and execution of arbitrary JavaScript code to modify databases, tables or data as desired
 
 ## Installation
-Once approved by the browser vendors, downloads will be available on the Chrome Web Store and the Mozilla Firefox's Add-Ons page.
+Please download and install the extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/kahuna/ilafpdbgcaodnkdklgemggjamhpdjile) for Chrome and Chromium based browsers such as Edge, Brave, and Opera, and from the [Firefox Addons Page](https://addons.mozilla.org/en-US/firefox/addon/kahuna-the-indexeddb-manager) for Firefox.
+<div align="center" width="200">
+      <a href="https://chromewebstore.google.com/detail/kahuna/ilafpdbgcaodnkdklgemggjamhpdjile">
+        <img src="https://hummingme.github.io/kahuna-docs/assets/icons/chrome-logo.svg" width="64" alt="install Kahuna for Chrome" /></a>
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="40">
+      <a href="https://addons.mozilla.org/en-US/firefox/addon/kahuna-the-indexeddb-manager/">
+        <img src="https://hummingme.github.io/kahuna-docs/assets/icons/firefox-logo.svg" width="64" alt="install Kahuna for Firefox" /></a>
+</div>
+
 
 ## Documentation
-Once written, the user documentation [will be available here](https://hummingme.github.io/kahuna-docs/)
+Sorry, the user documentation is still work in progress, but [will be available here](https://hummingme.github.io/kahuna-docs/) soon!
 
 ## Build and Install from Source
 ```sh
