@@ -17,7 +17,6 @@
         "js": ["contentscript.js"]
     }],
     "permissions": [
-        "storage",
         "*://*/*"
     ],
     "browser_action": {
