@@ -26,7 +26,6 @@ const AppWindow = class {
     #main; // main stage inside of #win
     #overlay; // node of application overlay
     #winOverlay; // node of appwindow overlay
-    #dragger; // node of drag-handle
     #resizer = {
         // nodes of resize-handles
         border: null,
@@ -125,7 +124,6 @@ const AppWindow = class {
         this.#win.addEventListener('pointerdown', this.onPointerDown, true);
 
         this.#winOverlay = this.#root.getElementById('window-overlay');
-        this.#dragger = this.#root.querySelector('nav#menu > div');
         this.#resizer = {
             border: this.#root.querySelector('#resize-border'),
             bottom: this.#root.querySelector('#resize-bottom'),
@@ -229,7 +227,8 @@ const AppWindow = class {
         ev.stopPropagation();
     };
     onPointerDown = (ev) => {
-        const dragging = ev.target === this.#dragger ? true : false;
+        const dragger = this.#root.querySelector('nav#menu > div');
+        const dragging = ev.target === dragger ? true : false;
         let resizing = false;
         let direction, cursor;
         if (Object.values(this.#resizer).includes(ev.target)) {
@@ -313,7 +312,7 @@ const AppWindow = class {
         this.setPointerHandlers(false);
         this.#update({ dragging: false, resizing: false, start: {} });
         if (this.#state.moveHandler && this.#state.moveHandler.isTarget(ev)) {
-            this.#state.moveHandler.stop(ev.clientX, ev.clientY);
+            this.#state.moveHandler.stop(ev);
         } else {
             settings.saveGlobals({ window: this.#state.dim });
         }

@@ -22,6 +22,7 @@ import {
 import { selectbox } from '../../lib/selectbox.js';
 import settings from '../../lib/settings.js';
 import { capitalize, isTable, pickProperties } from '../../lib/utils.js';
+import { isEmptyObject } from '../../lib/types.js';
 
 const state = Symbol('filter-fields-config state');
 
@@ -30,11 +31,10 @@ const FilterFieldsConfig = class {
     #filtersConfig;
     #remembered;
     #initialFilter;
-    constructor(filtersConfig, remembered) {
+    constructor() {}
+    async activate(filtersConfig, control) {
         this.#filtersConfig = filtersConfig;
-        this.#remembered = remembered;
-    }
-    async activate(control) {
+        this.#remembered = control.remembered;
         this[state] = {};
         if (control.isTable) {
             const { filters, columns, dexieTable } = isTable(control.appTarget)
@@ -53,14 +53,19 @@ const FilterFieldsConfig = class {
                 markUnindexed: false,
                 dexieTable,
             };
-            this.#initialFilter = initialFilter(columns, dexieTable);
+            if (columns.length > 0) {
+                this.#initialFilter = initialFilter(columns, dexieTable);
+            }
         }
     }
     async initFromSettings(target) {
-        const columns = (await settings.get({ ...target, subject: 'columns' })) || [];
+        const columnValues = await settings.get({ ...target, subject: 'columns' });
+        const columns = !isEmptyObject(columnValues) ? columnValues : [];
         const columnNames = columns.map((c) => c.name);
-        let filters = (await settings.get({ ...target, subject: 'filters' })) || [];
-        filters = filters.filter((f) => columnNames.includes(f.field));
+        const filterValues = await settings.get({ ...target, subject: 'filters' });
+        const filters = (!isEmptyObject(filterValues) ? filterValues : []).filter((f) =>
+            columnNames.includes(f.field),
+        );
         const dexieTable = (await getConnection(target.database)).table(target.table);
         return { filters, columns, dexieTable };
     }
@@ -93,7 +98,7 @@ const FilterFieldsConfig = class {
     }
     view(markUnindexed) {
         this[state].markUnindexed = markUnindexed;
-        return this.#filtersConfig.isTable
+        return this.#filtersConfig.isTable && this[state].columns.length > 0
             ? html`
                   <fieldset id="filter-fields">
                       <legend>${this.legend()}</legend>

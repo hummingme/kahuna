@@ -30,16 +30,16 @@ const ImportConfig = class extends Config {
     checkboxOptions = [
         { name: 'clearTablesBeforeImport', label: 'clear tables before' },
         { name: 'overwriteValues', label: 'overwrite values' },
+        { name: 'noTransaction', label: 'no transaction' },
         { name: 'acceptNameDiff', label: 'accept name diff' },
         { name: 'acceptVersionDiff', label: 'accept version diff' },
         { name: 'acceptChangedPrimaryKey', label: 'accept changed primary key' },
-        { name: 'noTransaction', label: 'no transaction' },
         { name: 'acceptMissingTables', label: 'accept missing tables' },
         { name: 'importDirectValues', label: 'import data as direct value' },
     ];
     selectOptions = [
         { name: 'dataImportFormat', label: 'file format for data import' },
-        { name: 'importEmptyAs', label: 'set empty values' },
+        { name: 'importEmptyAs', label: 'import empty csv values as' },
     ];
     inputOptions = [
         { name: 'primaryKeyName', label: 'primary key name', size: 15 },
@@ -96,7 +96,8 @@ primary key, new values will be generated on import.`;
     static directValuesNameInfo() {
         const info = `Name used in the import file for direct values which \
 should not get stored as object properties. If this field contains a name, \
-further values from the same row are ignored, if any.`;
+further values from the same row are ignored, if any. Applied only for CSV and \
+JSON import into tables with unnamed primary key.`;
         return infoIcon(info);
     }
     static async getSettings(target) {
@@ -113,14 +114,14 @@ further values from the same row are ignored, if any.`;
             dataImportFormat: 'dexie', // fixed for database, for table could be also csv and json
             primaryKeyName: 'key', // for csv & json, if pk is unnamed
             importDirectValues: false, // for csv & json
-            directValuesName: '', // for csv & json
+            directValuesName: 'value', // for csv & json
             importEmptyAs: 'empty string', // |'null', 'undefined', 'exclude' ; for csv
-            clearTablesBeforeImport: true, // database & table, all formats
+            clearTablesBeforeImport: false, // database & table, all formats
             overwriteValues: false, // database & table, all formats
-            acceptNameDiff: false, // database & table, for dexie
-            acceptVersionDiff: false, // database & table, for dexie
-            acceptChangedPrimaryKey: false, // database & table, for dexie
-            acceptMissingTables: false, // database, for dexie
+            acceptNameDiff: true, // database & table, for dexie
+            acceptVersionDiff: true, // database & table, for dexie
+            acceptChangedPrimaryKey: true, // database & table, for dexie
+            acceptMissingTables: true, // database, for dexie
             noTransaction: false, // database & table, for dexie
         };
     }

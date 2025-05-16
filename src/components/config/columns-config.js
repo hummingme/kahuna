@@ -12,6 +12,7 @@ import { Column } from '../../lib/column.js';
 import { isPrimKeyCompound, isPrimKeyUnnamed } from '../../lib/dexie-utils.js';
 import { selectbox } from '../../lib/selectbox.js';
 import settings from '../../lib/settings.js';
+import { isEmptyObject } from '../../lib/types.js';
 import { isTable, pickProperties } from '../../lib/utils.js';
 
 const ColumnsConfig = class extends Config {
@@ -42,7 +43,8 @@ const ColumnsConfig = class extends Config {
         return new ColumnsConfig({ control, values, defaults });
     }
     static async initFromSettings(target) {
-        const columns = (await settings.get({ ...target, subject: 'columns' })) || [];
+        const values = await settings.get({ ...target, subject: 'columns' });
+        const columns = !isEmptyObject(values) ? values : [];
         const dexieTable = (await getConnection(target.database)).table(target.table);
         return { columns, dexieTable };
     }
@@ -58,7 +60,7 @@ const ColumnsConfig = class extends Config {
         `;
     }
     columnsTableView(columns) {
-        return this.isTable && this.state.columns
+        return this.isTable && this.state.columns.length > 0
             ? html`
                   <fieldset id="columns-table" }>
                       <legend>${this.legend()}</legend>

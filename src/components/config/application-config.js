@@ -129,12 +129,16 @@ const ApplicationConfig = class extends Config {
 
         let resetConfirmPanel = '';
         if (this.state.confirmReset) {
-            const buttonYes = html`
-                <a @click=${this.resetYes.bind(this)} class="left">yes</a>
-            `;
-            const buttonNo = html`
-                <a @click=${this.resetNo.bind(this)} class="right">no</a>
-            `;
+            const buttonYes = button({
+                content: 'yes',
+                class: 'left',
+                '@click': this.resetYes.bind(this),
+            });
+            const buttonNo = button({
+                content: 'no',
+                class: 'right',
+                '@click': this.resetNo.bind(this),
+            });
             resetConfirmPanel = html`
                 <div class="confirm panel">
                     Are you sure?

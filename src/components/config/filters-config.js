@@ -24,12 +24,15 @@ const FiltersConfig = class extends Config {
         if (!control.rememberedSettings) {
             control.remember(values);
         }
-        const filterFieldsConfig = new FilterFieldsConfig(
-            control.actor,
-            control.remembered,
-        );
-        await filterFieldsConfig.activate(control);
-        return new FiltersConfig({ control, values, defaults, filterFieldsConfig });
+        const filterFieldsConfig = new FilterFieldsConfig();
+        const filtersConfig = new FiltersConfig({
+            control,
+            values,
+            defaults,
+            filterFieldsConfig,
+        });
+        await filterFieldsConfig.activate(filtersConfig, control);
+        return filtersConfig;
     }
     checkboxOptions = [
         {

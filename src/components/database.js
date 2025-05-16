@@ -132,7 +132,7 @@ const tablesTableTemplate = function (tables) {
                     ${symbolButton({
                         icon: 'tabler-settings',
                         title: 'table tools / import / export',
-                        id: tableToolsButtonId,
+                        id: `${tableToolsButtonId}-${idx}`,
                     })}
                 </td>
             </tr>
@@ -167,8 +167,8 @@ const onTbodyClicked = (event) => {
     }
 };
 
-const createClicked = () => {
-    DatabaseTools.summon(dbstate.selectedDB, databaseToolsButtonId);
+const createClicked = async () => {
+    await DatabaseTools.summon(dbstate.selectedDB, databaseToolsButtonId);
     configLayer.toggleTopic('create');
 };
 

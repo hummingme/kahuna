@@ -16,7 +16,7 @@ import { getConnection } from '../lib/connection.js';
 import CsvReader from '../lib/csvreader.js';
 import { isPrimKeyNamed, isPrimKeyUnnamed } from '../lib/dexie-utils.js';
 import messenger from '../lib/messenger.js';
-import { capitalize, zipObject } from '../lib/utils.js';
+import { capitalize, isTable, zipObject } from '../lib/utils.js';
 
 const state = Symbol('importer state');
 
@@ -41,8 +41,11 @@ const Importer = class {
         this[state] = { ...this[state], ...changes };
     }
     async getSettings(target) {
-        const { values: settings, defaults } = await ImportConfig.getSettings(target);
-        return { defaults, ...settings };
+        const { values, defaults } = await ImportConfig.getSettings(target);
+        if (isTable(target) === false) {
+            values.dataImportFormat = 'dexie';
+        }
+        return { defaults, ...values };
     }
     async refreshSettings() {
         this.update(await this.getSettings(this[state].target));
@@ -361,17 +364,21 @@ const Importer = class {
         }
         if (
             ['csv', 'json'].includes(this[state].dataImportFormat) &&
-            this[state].importDirectValues &&
+            isPrimKeyUnnamed(table.primKey) &&
             this[state].directValuesName.length > 0
         ) {
-            settingInfos = settingInfos.concat([
+            settingInfos.push(
                 this.settingInfo('import direct values', this[state].importDirectValues),
-                this.settingInfo(
-                    'name for direct values',
-                    this[state].directValuesName,
-                    ImportConfig.directValuesNameInfo(),
-                ),
-            ]);
+            );
+            if (this[state].importDirectValues) {
+                settingInfos.push(
+                    this.settingInfo(
+                        'name for direct values',
+                        this[state].directValuesName,
+                        ImportConfig.directValuesNameInfo(),
+                    ),
+                );
+            }
         }
         return html`
             <h2>

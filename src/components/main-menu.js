@@ -76,6 +76,9 @@ const MainMenu = class {
                     <a href="https://hummingme.github.io/kahuna-docs/" target="_blank">
                         Documentation ${svgIcon('tabler-external-link', { width: 14 })}
                     </a>
+                    <a href="https://github.com/hummingme/kahuna" target="_blank">
+                        Github ${svgIcon('tabler-external-link', { width: 14 })}
+                    </a>
                     <a data-subject="about">About</a>
                 </div>
             `;

@@ -69,7 +69,7 @@ const Exporter = class {
         return this[state].usage === 'database' ? ['dexie'] : ImportExport.dataFormats;
     }
     mimeTypes = {
-        dexi: 'application/json',
+        dexie: 'application/json',
         json: 'application/json',
         csv: 'text/csv',
     };
@@ -129,7 +129,7 @@ const Exporter = class {
                 // include value
                 data.forEach((row, idx) => {
                     if (row['*value*'] !== undefined) {
-                        row[this[state].valName] = row['*value*'];
+                        row[this[state].directValuesName] = row['*value*'];
                     } else if (isPlainObject(row) === false) {
                         data[idx] = { [directValuesName]: row };
                     }

@@ -589,7 +589,9 @@ const unsetOrder = () => {
 };
 
 const moveTarget = (ev) => {
-    return ev.target.matches('div[data-colindex]');
+    return (
+        ev.target.matches('div[data-colindex]') || datatable.state.colResizing !== null
+    );
 };
 
 const columnResizeStart = (ev) => {
@@ -604,16 +606,21 @@ const columnResizeStart = (ev) => {
 };
 
 const resizeColumn = (posX) => {
-    const tstate = datatable.state;
-    const colResizing = tstate.colResizing;
-    const delta = posX - colResizing.startX;
-    const columns = visibleColumns(tstate.columns);
-    columns[colResizing.index].width = Math.max(20, colResizing.startWidth + delta);
-    datatable.update({ columns: tstate.columns });
+    const {
+        columns,
+        colResizing: { startX, startWidth, index },
+    } = datatable.state;
+    const delta = posX - startX;
+    visibleColumns(columns)[index].width = Math.max(20, startWidth + delta);
+    handleWidthHandle(index - 1, 'visible');
+    datatable.update({ columns });
     appStore.rerender();
 };
 
-const columnResizeStop = () => {
+const columnResizeStop = (event) => {
+    if (event.target.matches('div[data-colindex]') === false) {
+        hideWidthHandles();
+    }
     datatable.update({ colResizing: null });
     ColumnsConfig.saveColumns(datatable.columns, appStore.target());
 };

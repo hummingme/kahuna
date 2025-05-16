@@ -1,6 +1,6 @@
 {
     "name": "kahuna",
-    "version": "1.0",
+    "version": "1.0.1",
     "description": "Browser-extension to view, edit, manage, export and import IndexedDB databases.",
     "author": "Lutz Brückner <dev@kahuna.rocks>",
     "license": "MPL-2.0",
@@ -41,6 +41,7 @@
         "globals": "^15.4.0",
         "http-server": "github:http-party/http-server",
         "onchange": "^7.1.0",
-        "prettier": "3.4.2"
+        "prettier": "3.4.2",
+        "web-ext": "^8.6.0"
     }
 }

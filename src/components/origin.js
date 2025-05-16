@@ -126,7 +126,7 @@ const template = (state) => {
                   <tbody @click=${onTbodyClicked}>
                       ${map(
                           state.databases,
-                          (db) => html`
+                          (db, idx) => html`
                               <tr
                                   data-dbindex=${idx++}
                                   title="click to load the database ${db.name}"
@@ -138,7 +138,7 @@ const template = (state) => {
                                       ${symbolButton({
                                           icon: 'tabler-settings',
                                           title: 'database tools / import / export',
-                                          id: databaseToolsButtonId,
+                                          id: `${databaseToolsButtonId}-${idx}`,
                                       })}
                                   </td>
                               </tr>
@@ -169,7 +169,8 @@ const onTbodyClicked = (ev) => {
     const tr = ev.target.closest('tr');
     const databaseIdx = parseInt(tr.dataset.dbindex);
     if (td.classList.contains('row-icons')) {
-        DatabaseTools.summon(databaseIdx, databaseToolsButtonId);
+        const anchorId = td.firstElementChild.id;
+        DatabaseTools.summon(databaseIdx, anchorId);
     } else {
         Database.summon(databaseIdx);
     }

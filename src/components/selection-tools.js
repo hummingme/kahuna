@@ -121,6 +121,27 @@ const view = () => {
     `;
 };
 
+const lastfmDeleteAutomaticEdits = async () => {
+    const collection = loadCollection(datatable.state);
+    await lastfmDeleteAutomaticEditsSelection(collection);
+    datatable.updateDatatable({
+        selected: new Set(),
+    });
+    configLayer.close();
+};
+
+const lastfmDeleteAutomaticEditsSelection = async (selection) => {
+    const rows = await selection.toArray();
+    const ids = rows.map((r) => r.id);
+    await datatable.state.dexieDb.table('jobs').put({
+        job: 'deleteEdits',
+        state: 'waiting',
+        data: { ids },
+        modified: Date.now(),
+    });
+    return ids.length;
+};
+
 /*
  * displayed beneath of datatable view
  */

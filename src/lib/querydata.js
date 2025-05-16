@@ -107,7 +107,7 @@ const applyUnnamedPkWithNotEquals = (constraints, below, above, dexieTable) => {
     const notEquals = [...constraints.notequal].sort((a, b) => a - b);
     const insideRange = notEquals.filter((value) => value >= above && value <= below);
     if (insideRange.length === 0) {
-        dexieTable.where(':id').between(above, below);
+        return dexieTable.where(':id').between(above, below);
     } else {
         const ranges = Array(insideRange.length + 1)
             .fill()
@@ -199,7 +199,7 @@ const isPrimKeyOrder = (order, primKey) => {
     if (order === '') return true;
     if (order === ':id') return true;
     if (primKey.compound === false && primKey.name === order) return true;
-    if (primKey.compound === true && primKey.keyPath[0].name === order) return true;
+    if (primKey.compound === true && primKey.keyPath[0] === order) return true;
     return false;
 };
 
