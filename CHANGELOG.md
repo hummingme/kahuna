@@ -1,4 +1,4 @@
-# v1.0.0-fixes
+# v1.0.1
 - released on 2025/05/16
 - bugfix: layer positioning for tableTools and databaseTools 
 - bugfix: app window dragging after first render
