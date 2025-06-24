@@ -29,8 +29,7 @@ Please download and install the extension from the [Chrome Web Store](https://ch
 
 
 ## Documentation
-The documentation is not yet complete, but a good start has been made and can be read at 
-[hummingme.github.io/kahuna-docs/](https://hummingme.github.io/kahuna-docs/).
+The documentation for the latest version is available at [hummingme.github.io/kahuna-docs/](https://hummingme.github.io/kahuna-docs/).
 
 ## Build and Install from Source
 ```sh
