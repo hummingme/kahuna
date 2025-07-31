@@ -1,6 +1,6 @@
 {
     "name": "Kahuna",
-    "version": "1.0.1",
+    "version": "1.5",
     "description": "Browse, edit and manage IndexedDB databases.",
     "author":"Lutz Brückner",
     "homepage_url":"https://github.com/hummingme/kahuna#readme",
@@ -26,11 +26,11 @@
     ],
     "action": {
         "default_icon": {
-            "16": "icons/kahuna-16.png",
-            "32": "icons/kahuna-32.png",
-            "48": "icons/kahuna-48.png"
+            "16": "icons/kahuna-gray-16.png",
+            "32": "icons/kahuna-gray-32.png",
+            "48": "icons/kahuna-gray-48.png"
         },  
-        "default_title": "Kahuna: no databases found"
+        "default_title": "Kahuna: Can't run on restricted pages."
     },
     "commands": {
         "_execute_action": {

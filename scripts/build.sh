@@ -2,7 +2,7 @@
 
 source ./scripts/settings.sh "$1" "$2"
 
-BUNDLES=("kahuna.js" "contentscript.js" "contentscript_worker.js") 
+BUNDLES=("kahuna.js" "contentscript.js" "contentscript_worker.js")
 if [ "$TARGET" = "firefox" ]; then
     BUNDLES+=("background.js")
 elif [ "$TARGET" = "chromium" ]; then

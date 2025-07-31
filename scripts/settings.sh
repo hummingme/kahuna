@@ -22,7 +22,7 @@ CHROMIUM_PROFILE="kahuna-dev"
 
 ESBUILD_PARAMS=(
     "--bundle"
-    "--alias:dexie=dexie/dist/modern/dexie.mjs"
+#    "--alias:dexie=dexie/dist/modern/dexie.mjs"
     "--alias:buildinfo.js=$BUILD/buildinfo.js"
     "--target=es2024"
     "--log-level=warning"

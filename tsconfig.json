@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es2024",                               /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */
+    "lib": ["es2024", "dom", "dom.iterable"] ,
+    "module": "nodenext",                             /* Specify what module code is generated. */
+    "moduleResolution": "nodenext",                   /* Specify how TypeScript looks up a file from a given module specifier. */
+    "allowImportingTsExtensions": true,               /* Allow imports to include TypeScript file extensions. Requires '--moduleResolution bundler' and either '--noEmit' or '--emitDeclarationOnly' to be set. */
+    "noEmit": true,                                   /* Disable emitting files from a compilation. */
+    "forceConsistentCasingInFileNames": true,         /* Ensure that casing is correct in imports. */
+    "strict": true,                                   /* Enable all strict type-checking options. */
+    "skipLibCheck": true                              /* Skip type checking all .d.ts files. */
+  },
+  "include": ["src/**/*"]
+}

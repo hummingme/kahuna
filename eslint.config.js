@@ -1,22 +1,25 @@
 import globals from 'globals';
-import js from '@eslint/js';
-import eslintConfigPrettier from 'eslint-config-prettier';
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import prettierFlat from 'eslint-config-prettier/flat';
 
-export default [
+export default tseslint.config(
+    eslint.configs.recommended,
+    tseslint.configs.recommended,
     {
-        files: ['**/*.js'],
-    },
-    {
+        files: ['**/*.ts'],
         languageOptions: {
-            globals: {
-                ...globals.browser,
+            parser: tseslint.parser,
+            parserOptions: {
+                project: './tsconfig.json',
+                globals: {
+                    ...globals.browser,
+                },
             },
         },
-    },
-    js.configs.recommended,
-    {
         rules: {
-            'no-unused-vars': [
+            'no-unused-vars': 'off',
+            '@typescript-eslint/no-unused-vars': [
                 'error',
                 {
                     varsIgnorePattern: '^_',
@@ -27,8 +30,9 @@ export default [
                     reportUsedIgnorePattern: true,
                 },
             ],
+            '@typescript-eslint/no-explicit-any': 'off',
             'no-console': 'warn',
         },
     },
-    eslintConfigPrettier,
-];
+    prettierFlat,
+);

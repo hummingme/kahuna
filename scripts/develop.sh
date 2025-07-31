@@ -4,7 +4,7 @@ source ./scripts/settings.sh "$1"
 
 "$ROOT"/scripts/build.sh "$TARGET"
 
-npx onchange --await-write-finish 500 'src/**/*.js' 'src/static/*.css' \
+npx onchange --await-write-finish 500 'src/**/*.js' 'src/**/*.ts' 'src/static/*.css' \
     -- npm run build "$TARGET" | ts "%H:%M:%S" &
 sleep 1
 WATCH_PID=$(pgrep -nf onchange)

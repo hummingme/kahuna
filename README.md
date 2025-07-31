@@ -9,13 +9,13 @@ Kahuna is a browser extension for Firefox and Chromium based browsers to manage 
 ## Features
 * signals with its icon in the browser's address bar when IndexedDB databases exist for a visited website
 * displays lists of the found databases and tables (aka object stores)
-* can create new databases and delete existing databases
-* tables can be created and deleted, the indexes of tables can be modified
+* can create new databases, as well as copy and delete existing databases
+* its schema editor can be used to create and delete tables, and to modify the indexes of tables
 * displays the data of a table page by page and enables the editing and deletion of data records
-* Filters can be configured and combined for all data fields to display or export a selection of the data contained in a table
+* filters can be configured and combined for all data fields to display or export a selection of the data contained in a table
 * imports and exports databases in dexie format
 * imports and exports tables in dexie, json and csv format, as well as selected data records in json and csv format
-* enables the entry and execution of arbitrary JavaScript code to modify databases, tables or data as desired
+* enables the entry and execution of arbitrary JavaScript code to modify databases, tables or data
 
 ## Installation
 Please download and install the extension from the [Chrome Web Store](https://chromewebstore.google.com/detail/kahuna/ilafpdbgcaodnkdklgemggjamhpdjile) for Chrome and Chromium based browsers such as Edge, Brave, and Opera, and from the [Firefox Addons Page](https://addons.mozilla.org/en-US/firefox/addon/kahuna-the-indexeddb-manager) for Firefox.

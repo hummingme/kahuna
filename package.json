@@ -1,14 +1,14 @@
 {
     "name": "kahuna",
-    "version": "1.0.1",
+    "version": "1.5",
     "description": "Browser-extension to view, edit, manage, export and import IndexedDB databases.",
     "author": "Lutz Brückner <dev@kahuna.rocks>",
     "license": "MPL-2.0",
-    "private":true,
+    "private": true,
     "type": "module",
     "repository": "github:hummingme/kahuna",
     "homepage": "https://github.com/hummingme/kahuna/README.md",
-    "bugs":"https://github.com/hummingme/kahuna/issues",
+    "bugs": "https://github.com/hummingme/kahuna/issues",
     "keywords": [
         "indexeddb",
         "databases",
@@ -23,25 +23,30 @@
         "release": "scripts/release.sh",
         "dev:firefox": "scripts/develop.sh firefox",
         "dev:chromium": "scripts/develop.sh chromium",
-        "lint": "eslint 'src/**/*.js'"
+        "lint": "eslint 'src/**/*.ts'",
+        "check": "npx tsc --noEmit"
     },
     "dependencies": {
-        "dexie": "^4.0.0",
-        "dexie-export-import": "^4.1.1",
-        "lit": "^3.0.0",
-        "lit-html": "^3.0.0",
-        "@open-wc/lit-helpers": "^0.7.0",
-        "@tabler/icons": "^3.0.0"
+        "@open-wc/lit-helpers": "^0.7",
+        "@tabler/icons": "^3.34",
+        "dexie": "^4.0",
+        "dexie-export-import": "^4.1.4",
+        "lit": "^3.3",
+        "lit-html": "^3.3"
     },
     "devDependencies": {
-        "@eslint/js": "^9",
+        "@eslint/js": "^9.31",
+        "@types/chrome": "^0.1",
+        "@types/firefox-webext-browser": "^120",
         "esbuild": "^0.25",
-        "eslint": "^9",
-        "eslint-config-prettier": "^10.0",
-        "globals": "^15.4.0",
+        "eslint": "^9.31",
+        "eslint-config-prettier": "^10.1",
+        "globals": "^16.3",
         "http-server": "github:http-party/http-server",
-        "onchange": "^7.1.0",
+        "onchange": "^7.1",
         "prettier": "3.4.2",
-        "web-ext": "^8.6.0"
+        "typescript": "^5.8",
+        "typescript-eslint": "^8.37",
+        "web-ext": "^8.8"
     }
 }
