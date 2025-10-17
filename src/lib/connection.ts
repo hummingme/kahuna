@@ -10,7 +10,7 @@ const connections: Map<string, Dexie> = new Map();
 
 export const getDB = (databaseName: string): Dexie => {
     if (databases.has(databaseName)) {
-        return databases.get(databaseName) as Dexie;
+        return databases.get(databaseName)!;
     } else {
         const db = new Dexie(databaseName, { cache: 'disabled' });
         databases.set(databaseName, db);
@@ -22,11 +22,11 @@ export const getDB = (databaseName: string): Dexie => {
 };
 
 export const getConnection = async (databaseName: string): Promise<Dexie> => {
-    if (connections.has(databaseName) === false) {
-        const connection = await getDB(databaseName).open();
-        connections.set(databaseName, connection);
+    const connection = connections.get(databaseName);
+    if (!connection || connection.isOpen() === false) {
+        connections.set(databaseName, await getDB(databaseName).open());
     }
-    return connections.get(databaseName) as Dexie;
+    return connections.get(databaseName)!;
 };
 
 export const closeDB = (databaseName: string) => {

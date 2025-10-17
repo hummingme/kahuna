@@ -46,11 +46,9 @@ namespace.tabs.onUpdated.addListener((tabId, changeInfo) => {
     }
 });
 
-let pingGuard: number | undefined;
 namespace.runtime.onConnect.addListener((port) => {
     if (!port?.sender?.tab?.id) return;
     const tabId = port.sender.tab.id;
-
     if (port.name === 'main') {
         mainPorts.set(tabId, port);
     } else {
@@ -63,16 +61,5 @@ namespace.runtime.onConnect.addListener((port) => {
         } else {
             contentPorts.delete(tabId);
         }
-        if (pingGuard === tabId) {
-            const nextPort = contentPorts.values().next().value;
-            if (nextPort?.sender?.tab) {
-                nextPort.postMessage({ type: 'keepAlive' });
-                pingGuard = nextPort.sender.tab.id;
-            }
-        }
     });
-    if (!pingGuard && port.name === 'content') {
-        pingGuard = port.sender.tab.id;
-        port.postMessage({ type: 'keepAlive' });
-    }
 });

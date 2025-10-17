@@ -74,10 +74,37 @@ const ApplicationConfig = class extends Config {
             '@change': this.colorSchemeChanged.bind(this, 'colorSchemeOrigin'),
         },
     ];
+    inputOptions = [
+        {
+            name: 'colorStringLightmode',
+            label: 'color for string values (light mode)',
+            type: 'color',
+            '@change': this.colorChanged.bind(this, 'colorStringLightmode'),
+        },
+        {
+            name: 'colorNumberLightmode',
+            label: 'color for number values (light mode)',
+            type: 'color',
+            '@change': this.colorChanged.bind(this, 'colorNumberLightmode'),
+        },
+        {
+            name: 'colorStringDarkmode',
+            label: 'color for string values (dark mode)',
+            type: 'color',
+            '@change': this.colorChanged.bind(this, 'colorStringDarkmode'),
+        },
+        {
+            name: 'colorNumberDarkmode',
+            label: 'color for number values (dark mode)',
+            type: 'color',
+            '@change': this.colorChanged.bind(this, 'colorNumberDarkmode'),
+        },
+    ];
     view() {
         return html`
-            ${this.selectOptionsView()} ${this.checkboxOptionsView()}
-            ${this.ignoreDatabasesView()} ${this.resetView()}
+            ${this.selectOptionsView()} ${this.inputOptionsView()}
+            ${this.checkboxOptionsView()} ${this.ignoreDatabasesView()}
+            ${this.resetView()}
         `;
     }
     ignoreDatabasesView() {
@@ -164,13 +191,18 @@ const ApplicationConfig = class extends Config {
         }
         return html`
             <hr />
-            <p>${resetCheckbox}</p>
+            <p><span>${resetCheckbox}</span></p>
             ${resetConfirmPanel}
         `;
     }
     colorSchemeChanged(name: OptionName, event: Event) {
         this.inputOptionChanged(name, event);
         appWindow.setColorScheme();
+        appWindow.setColors();
+    }
+    colorChanged(name: OptionName, event: Event) {
+        this.inputOptionChanged(name, event);
+        appWindow.setColors();
     }
     toggleReset() {
         this.#confirmReset = !this.#confirmReset;
@@ -220,6 +252,16 @@ const ApplicationConfig = class extends Config {
             this.state.ignoreDatabases.push(name);
             this.saveSettings();
         }
+    }
+    setDefaults() {
+        super.setDefaults();
+        appWindow.setColorScheme();
+        appWindow.setColors();
+    }
+    undoChanges() {
+        super.undoChanges();
+        appWindow.setColorScheme();
+        appWindow.setColors();
     }
     saveSettings() {
         const values = pickProperties(this.state, Object.keys(this.state.defaults));

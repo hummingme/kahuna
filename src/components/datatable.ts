@@ -186,10 +186,10 @@ const Datatable = class {
         await jsCodearea.init({
             enabled: settings.displayCodearea && env.codeExecution,
             target,
-            exposedVariables: async () => await codeareaExposedVariables(datatable.state),
-            executed: async () => await codeareaExecuted(),
             selectorFields,
-            selected: initialState.selected,
+            executed: async () => await codeareaExecuted(),
+            requiredVariables: async () =>
+                await codeareaRequiredVariables(datatable.state),
         });
         await this.updateDatatable(initialState);
         appStore.update({ selectedTable });
@@ -296,6 +296,7 @@ const Datatable = class {
         const {
             order,
             direction,
+            limit,
             dexieTable,
             target,
             firstrun,
@@ -333,6 +334,8 @@ const Datatable = class {
                     firstrun: false,
                 });
                 return false;
+            } else if (data.length > limit) {
+                data = data.slice(0, limit);
             }
         }
         data = addKeypathsData(data, columns);
@@ -414,22 +417,19 @@ const columnsFromData = (
 
 const columnsFromIndices = (table: KTable, dataProps: Set<string>) => {
     const columns: Column[] = [];
-    // the indexed fields are sure columns
-    if (isPrimKeyNamed(table.primKey)) {
-        if (isPrimKeyCompound(table.primKey) && Array.isArray(table.primKey.keyPath)) {
-            columns.push(...columnsFromKeypath(table.primKey.keyPath, columns));
-        } else {
-            columns.unshift(
-                buildColumn({ name: table.primKey.name, indexed: true, visible: true }),
-            );
-        }
+
+    if (isPrimKeyNamed(table.primKey) && !isPrimKeyCompound(table.primKey)) {
+        // primary key, not compound
+        columns.unshift(
+            buildColumn({ name: table.primKey.name, indexed: true, visible: true }),
+        );
     }
-    // unnamed primary key
     if (isPrimKeyUnnamed(table.primKey)) {
+        // unnamed primary key
         columns.unshift(buildColumn({ name: '*key*', indexed: true, visible: true }));
     }
-
     table.indexes.forEach((index) => {
+        // regular indexes
         if (!index.compound) {
             if (columns.some((c) => c.name === index.name) === false) {
                 columns.push(
@@ -440,6 +440,12 @@ const columnsFromIndices = (table: KTable, dataProps: Set<string>) => {
             columns.push(...columnsFromKeypath(index.keyPath, columns));
         }
     });
+    if (isPrimKeyCompound(table.primKey) && Array.isArray(table.primKey.keyPath)) {
+        // primary key, compound
+        // checked at the end so that additional indices on the used fields are prioritized
+        columns.push(...columnsFromKeypath(table.primKey.keyPath, columns));
+    }
+
     for (const column of columns) {
         column.innerValue = !dataProps.has(column.name) && column.name.includes('.');
     }
@@ -533,15 +539,17 @@ const setColumnsWidths = (columns: Column[], data: PlainObject[]) => {
  * a filter value has changed -> validate and save the filter
  */
 const onFilterChanged = (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    const idx = parseInt(target.dataset.searchindex || '');
-    const val = target.value.trim();
-    const filters = datatable.filters;
-    if (Number.isInteger(idx) && val !== filters[idx].search) {
-        filters[idx].search = val;
-        filters[idx].valid = isFilterValid(val, filters[idx]);
-        FilterFieldsConfig.saveFilters(filters, appStore.target());
-        datatable.update({ filters });
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) {
+        const idx = parseInt(target.dataset.searchindex || '');
+        const val = target.value.trim();
+        const filters = datatable.filters;
+        if (Number.isInteger(idx) && val !== filters[idx].search) {
+            filters[idx].search = val;
+            filters[idx].valid = isFilterValid(val, filters[idx]);
+            FilterFieldsConfig.saveFilters(filters, appStore.target());
+            datatable.update({ filters });
+        }
     }
 };
 
@@ -1114,13 +1122,11 @@ const rowView = (
 
 const cellClasses = (type: AllowedType) => {
     const classes = [];
-    if (!['string', 'number', 'bigint', 'array', 'object'].includes(type)) {
-        classes.push('italic');
-    }
     if (['number', 'bigint'].includes(type)) {
-        classes.push('aright');
-    }
-    if (['null', 'undefined', 'boolean'].includes(type)) {
+        classes.push('aright', 'colored-number');
+    } else if (type === 'string') {
+        classes.push('colored-string');
+    } else if (['null', 'undefined', 'boolean'].includes(type)) {
         classes.push('center');
     }
     return classes.join(' ');
@@ -1296,12 +1302,11 @@ const onQueryError = (message: Message) => {
     }
 };
 
-const codeareaExposedVariables = async (state: DatatableState) => {
+const codeareaRequiredVariables = async (state: DatatableState) => {
     return {
+        selectorFields: state.selectorFields,
+        selected: state.selected,
         row: getEditRow(state),
-        db: null,
-        table: null,
-        selection: null,
     };
 };
 
@@ -1328,7 +1333,6 @@ const getEditRow = ({
             }
         }
     }
-    return null;
 };
 
 const codeareaExecuted = async () => {

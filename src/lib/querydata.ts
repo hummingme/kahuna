@@ -210,13 +210,17 @@ const emptyCollection = (dexieTable: Table) => {
 
 const optimizeApplyOrder = (filters: Filter[]) => {
     return filters.sort((a, b) => {
+        // '*key*' filters must be applied first, because ':id' can be used
+        // in table.where() but not in collection.filter()
         if (a.field === '*key*' || b.field === '*key*') {
             return a.field === '*key*' ? -1 : 1;
         }
-        if (a.indexed !== b.indexed) {
-            return a.indexed ? -1 : 1;
+        const aIndexed = a.indexed && !!getFuncIndexed(a);
+        const bIndexed = b.indexed && !!getFuncIndexed(b);
+        if (aIndexed !== bIndexed) {
+            return aIndexed ? -1 : 1;
         }
-        if (a.indexed && getFuncIndexed(a)) {
+        if (aIndexed && bIndexed) {
             return (
                 indexedMethods.indexOf(a.method as IndexedMethod) -
                 indexedMethods.indexOf(b.method as IndexedMethod)

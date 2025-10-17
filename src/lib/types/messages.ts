@@ -56,9 +56,8 @@ export interface ExecuteCodePayload {
     table: string;
     selectorFields: string[];
     selected: Set<string | number>;
-    row: PlainObject;
-    varNames: string[];
-    asyncCode: string;
+    row?: PlainObject;
+    code: string;
 }
 interface QueryDataMessage {
     type: 'queryData';
@@ -115,7 +114,6 @@ interface SimpleMessage {
 }
 type SimpleMessageType =
     | 'changedDatabases'
-    | 'keepAlive'
     | 'getPermissions'
     | 'checkFlaws'
     | 'toggleVisibility'
@@ -127,15 +125,13 @@ type SimpleMessageType =
     | 'refreshImporter'
     | 'refreshMessagestack'
     | 'rerenderApp'
-    | 'kahunaAlive'
-    | 'pingBackground';
+    | 'kahunaAlive';
 
 // message topics indexed by usage
 export const MESSAGE_TOPICS = {
     toContent: [
         'changedDatabases',
         'idxdbmExecuteCode',
-        'keepAlive',
         'obtainSettings',
         'saveSettings',
     ],
@@ -167,7 +163,7 @@ export const MESSAGE_TOPICS = {
         'reloadOrigin',
         'rerenderApp',
     ],
-    contentscriptMessenger: ['foundDatabases', 'kahunaAlive', 'pingBackground'],
+    contentscriptMessenger: ['foundDatabases', 'kahunaAlive'],
 } as const;
 
 export type TopicGroup = keyof typeof MESSAGE_TOPICS;

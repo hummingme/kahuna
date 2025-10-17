@@ -91,7 +91,7 @@ const template = function (tables: KTable[]): TemplateResult {
     } else if (appStore.loading === true) {
         return html`
             <div class="lonely">
-                Please be patient while the databases from
+                Please be patient while the tables from
                 <i>${dbstate.dbname}</i>
                 are loaded!
             </div>

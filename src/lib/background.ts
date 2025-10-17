@@ -51,8 +51,6 @@ export const messageListener = async (
             values: { permissions, hostPermissions, version },
         };
         port.postMessage(message);
-    } else if (message.type === 'pingBackground') {
-        // console.log('got pinged');
     } else if (message.type === 'kahunaAlive') {
         const tabId = port?.sender?.tab?.id;
         if (tabId) {

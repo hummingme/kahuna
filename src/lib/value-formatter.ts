@@ -138,7 +138,7 @@ class ValueFormatter {
     }
     arraybuffer(val: ArrayBufferLike) {
         const option_str = val.maxByteLength
-            ? `, {maxByteLength:${val.maxByteLength}}}`
+            ? `, {maxByteLength:${val.maxByteLength}}`
             : '';
         return `ArrayBuffer(${val.byteLength}${option_str})`;
     }

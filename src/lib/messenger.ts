@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { namespace, NSPort } from './runtime.ts';
+import { postToBackground } from './post-background.ts';
 import {
     isGroupMessage,
     isTopicInGroup,
@@ -17,16 +17,9 @@ interface Handler {
 
 const Messenger = class {
     #worker: Worker | null = null;
-    #backgroundPort: NSPort;
     #handlers: Map<MessageTopic, Handler[]> = new Map();
     constructor() {
         window.addEventListener('message', this.handleContentMessage.bind(this));
-        this.#backgroundPort = namespace.runtime.connect({
-            name: 'main',
-        });
-        this.#backgroundPort.onMessage.addListener(
-            this.handleBackgroundMessage.bind(this),
-        );
     }
     set worker(worker: Worker | null) {
         this.#worker = worker;
@@ -88,12 +81,13 @@ const Messenger = class {
     }
     post(message: Message) {
         if (isTopicInGroup('toBackground', message.type)) {
-            this.#backgroundPort.postMessage(message);
+            const handler = this.handleBackgroundMessage.bind(this);
+            postToBackground(message, handler);
         } else if (isTopicInGroup('toWorker', message.type)) {
             if (this.#worker) {
                 this.#worker.postMessage(message);
             } else {
-                console.warn('cannot post to worker', message); // eslint-disable-line no-console
+                console.error('cannot post to worker', message); // eslint-disable-line no-console
             }
         } else if (isTopicInGroup('toContent', message.type)) {
             window.postMessage(message);

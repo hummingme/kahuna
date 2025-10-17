@@ -11,7 +11,6 @@ import { type Message } from './lib/types/messages.ts';
 export interface ContentScriptType {
     handleGlobalSettings: (msg: Message) => void;
     searchDatabases: () => void;
-    keepBackgroundAlive: () => void;
 }
 
 interface ContentScriptState extends ContentScriptSettings {
@@ -27,7 +26,6 @@ const state = Symbol('contentscript state');
 const ContentScript = class {
     [state]: ContentScriptState;
     #messenger;
-    #pingInterval: number | null = null;
     constructor() {
         this.#messenger = new ContentscriptMessenger(this);
         this[state] = {
@@ -145,14 +143,6 @@ const ContentScript = class {
                 Object.hasOwn(msg.values, 'dontNotifyEmpty'))
             ? msg.values
             : null;
-    }
-    pingInterval = null;
-    keepBackgroundAlive() {
-        if (this.#pingInterval === null) {
-            this.#pingInterval = window.setInterval(() => {
-                this.#messenger.post({ type: 'pingBackground' });
-            }, 28 * 1000);
-        }
     }
 };
 

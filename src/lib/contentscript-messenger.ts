@@ -3,23 +3,16 @@
  * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
  */
 import type { ContentScriptType } from '../contentscript.ts';
-import { namespace, type NSPort } from './runtime.ts';
 import { globalTarget } from './app-target.ts';
+import { postToBackground } from './post-background.ts';
 import { uniqueId } from './utils.ts';
 import { type Message, isGroupMessage } from './types/messages.ts';
 
 const ContentscriptMessenger = class {
     #actor;
-    #backgroundPort: NSPort;
     constructor(actor: ContentScriptType) {
         this.#actor = actor;
         window.addEventListener('message', this.handleInjectedMessage.bind(this));
-        this.#backgroundPort = namespace.runtime.connect({
-            name: 'content',
-        });
-        this.#backgroundPort.onMessage.addListener(
-            this.handleBackgroundMessage.bind(this),
-        );
     }
     init() {
         this.post({
@@ -48,15 +41,14 @@ const ContentscriptMessenger = class {
         if (this.#actor && isGroupMessage('toContent', msg)) {
             if (['obtainSettings', 'saveSettings'].includes(msg.type)) {
                 this.#actor.handleGlobalSettings(msg);
-            } else if (msg.type === 'keepAlive') {
-                this.#actor.keepBackgroundAlive();
             } else {
                 throw `contentscript got unexpected message from background: ${msg.type}`;
             }
         }
     }
-    post(msg: Message) {
-        this.#backgroundPort.postMessage(msg);
+    post(message: Message) {
+        const handler = this.handleBackgroundMessage.bind(this);
+        postToBackground(message, handler);
     }
 };
 

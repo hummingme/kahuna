@@ -1,3 +1,17 @@
+# v1.5.1
+- released on 2025/10/17
+- Highlight string and number values by color when displaying in the datatable
+- Selecting the colors for strings and numeric values ​​in the application configuration
+- Enlarged the range to -30 years .. +20 years in which integer values ​​are displayed as dates when `date` is selected as the display type 
+- Improved sorting of filters to ensure that indexed filters are always considered first
+- Prioritize additional indexes over composite primary keys when using named primary keys, as these are often better applied
+- Bugfix: display the UpdateInfo for updates only, not for new installations
+- Bugfix: for ArrayBuffer values, the formatting has been corrected for displaying and when editing data rows
+- Bugfix: follow the `rows per page` setting on the initial view of an unfiltered and unsorted table
+- Bugfix: never add an additional column `*key*` when copying tables and databases
+- Bugfix: correct preparation of the `collection` variable for the javascript code to be executed from the textarea
+- Bugfix: with Chromium, manifest version 3, reconnect message port if the background worker is sleeping
+
 # v1.5.0
 - released on 2025/07/31
 - Table tools: copy table added, optionally with or without their data

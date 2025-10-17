@@ -38,12 +38,14 @@ interface JsCodeareaState extends JsCodeareaConfigValues {
 interface JsCodeareaOptions {
     enabled: boolean;
     target: AppTarget;
-    exposedVariables: () => Promise<PlainObject>;
-    executed: () => Promise<void>;
     selectorFields: string[];
-    selected: Set<string | number>;
+    executed: () => Promise<void>;
+    requiredVariables: () => Promise<RequiredVariables>;
 }
-
+interface RequiredVariables {
+    selected: Set<string | number>;
+    row?: PlainObject;
+}
 const state = Symbol('JsCodearea state');
 
 const JsCodearea = class {
@@ -354,18 +356,12 @@ const JsCodearea = class {
         const code = this.textarea.value;
         this.update({ code });
         this.startLoading();
-        const vars = await options.exposedVariables();
-        const varNames = [...Object.keys(vars)];
-        const varsList = varNames.join(', ');
-        const asyncCode =
-            `async function f(${varsList}) { ${code}; };` + `return f(${varsList})`;
-        const { selected, selectorFields } = options;
+        const { selected, row } = await options.requiredVariables();
         const load = {
-            asyncCode,
-            varNames,
+            code,
             selected,
-            selectorFields,
-            row: vars.row,
+            selectorFields: options.selectorFields,
+            row,
             ...options.target,
         };
         const executionMethod = this.executionMethod();

@@ -15,10 +15,14 @@ const startupCheckings = () => {
     }
     const lastUpdateInfo = settings.global('lastUpdateInfo');
     if (
+        lastUpdateInfo.length > 0 &&
         compareSemanticVersions(env.version, lastUpdateInfo) > 0 &&
         env.version === UpdateInfo.version
     ) {
         appStore.update({ updateInfoVisible: true });
+    }
+    if (lastUpdateInfo.length === 0) {
+        settings.saveGlobals({ lastUpdateInfo: env.version });
     }
 };
 const compareSemanticVersions = (v1: string, v2: string) => {

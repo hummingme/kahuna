@@ -47,8 +47,9 @@ export interface SelectOption extends Option {
     '@change'?: (event: Event) => void;
 }
 export interface InputOption extends Option {
-    size: number;
+    size?: number;
     class?: string;
+    '@change'?: (event: Event) => void;
 }
 
 export type ApplicationOptions = ReturnType<typeof applicationDefaultOptions>;

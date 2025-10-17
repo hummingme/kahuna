@@ -111,7 +111,7 @@ export const copyTableData = async (
         let data: object[] = [];
         do {
             const collection = sourceTable.offset(skip).limit(CHUNKSIZE);
-            data = (await collectionToArray(collection, primKeyNamed)) as object[];
+            data = (await collectionToArray(collection, !primKeyNamed)) as object[];
             if (primKeyNamed) {
                 targetTable.bulkAdd(data);
             } else {

@@ -31,32 +31,41 @@ export const putSettings = async (data: PlainObject) => {
 export const getSettings = async (
     key: SettingKey,
 ): Promise<PlainObject | PlainObject[]> => {
-    const dbHandle = await getConnection(DBNAME);
-    let values;
-    if (
-        // settings without hierarchical default values
-        ['application', 'globals', 'filters', 'columns', 'jscodearea'].includes(
-            key.subject,
-        )
-    ) {
-        values = (await dbHandle.table('settings').get(Object.values(key)))?.values;
-    } else if (
-        ['behavior', 'export', 'import', 'column-settings', 'filter-settings'].includes(
-            key.subject,
-        )
-    ) {
-        for (const settingKey of settingsKeys({ ...key })) {
-            const result = await dbHandle
-                .table('settings')
-                .get(Object.values(settingKey));
-            if (result) {
-                values = Object.assign({ ...result.values }, values);
+    try {
+        const dbHandle = await getConnection(DBNAME);
+        let values;
+        if (
+            // settings without hierarchical default values
+            ['application', 'globals', 'filters', 'columns', 'jscodearea'].includes(
+                key.subject,
+            )
+        ) {
+            values = (await dbHandle.table('settings').get(Object.values(key)))?.values;
+        } else if (
+            [
+                'behavior',
+                'export',
+                'import',
+                'column-settings',
+                'filter-settings',
+            ].includes(key.subject)
+        ) {
+            for (const settingKey of settingsKeys({ ...key })) {
+                const result = await dbHandle
+                    .table('settings')
+                    .get(Object.values(settingKey));
+                if (result) {
+                    values = Object.assign({ ...result.values }, values);
+                }
             }
+        } else {
+            throw Error(`requestSettings for unknown subject: ${key.subject}`);
         }
-    } else {
-        throw Error(`requestSettings for unknown subject: ${key.subject}`);
+        return values || {};
+    } catch (error) {
+        console.error(error, key); // eslint-disable-line no-console
+        return {};
     }
-    return values || {};
 };
 
 export const clearSettings = async (target: AppTarget) => {

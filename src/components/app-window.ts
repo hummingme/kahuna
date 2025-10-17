@@ -130,6 +130,7 @@ const AppWindow = class {
         });
         messenger.register('toggleVisibility', this.toggleVisibility.bind(this));
         this.setColorScheme();
+        this.setColors();
         this.render();
         this.show();
     }
@@ -147,6 +148,21 @@ const AppWindow = class {
         });
         document.querySelector('body')?.appendChild(host);
         return host;
+    }
+    setColors() {
+        const colorScheme = this.#host.getAttribute('data-color-theme');
+        const [colorString, colorNumber] =
+            colorScheme === 'light'
+                ? [
+                      settings.global('colorStringLightmode'),
+                      settings.global('colorNumberLightmode'),
+                  ]
+                : [
+                      settings.global('colorStringDarkmode'),
+                      settings.global('colorNumberDarkmode'),
+                  ];
+        this.#host.style.setProperty('--nice-colored-string', colorString);
+        this.#host.style.setProperty('--nice-colored-number', colorNumber);
     }
     setColorScheme() {
         const colorSchemeOrigin = settings.global('colorSchemeOrigin');

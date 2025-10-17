@@ -21,8 +21,11 @@ const initVariables = async (load: ExecuteCodePayload) => {
 };
 
 const executeCode = async (load: ExecuteCodePayload) => {
-    const jsFunc = new Function(...load.varNames, load.asyncCode);
     const vars = await initVariables(load);
+    const varNames = Object.keys(vars);
+    const varsList = varNames.join(', ');
+    const asyncCode = `async function f(${varsList}) { ${load.code}; }; return f(${varsList})`;
+    const jsFunc = new Function(...varNames, asyncCode);
     await jsFunc(...Object.values(vars));
 };
 

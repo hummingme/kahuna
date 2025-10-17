@@ -125,8 +125,8 @@ interface DateRange {
 const date = new Date();
 
 const dateMicroRange: DateRange = {
-    from: date.setFullYear(date.getFullYear() - 10),
-    to: date.setFullYear(date.getFullYear() + 20),
+    from: date.setFullYear(date.getFullYear() - 30),
+    to: date.setFullYear(date.getFullYear() + 50),
 };
 const dateSecondsRange: DateRange = {
     from: Math.floor(dateMicroRange.from / 1000),

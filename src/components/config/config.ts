@@ -12,6 +12,7 @@ import type {
     OptionName,
     RealmOptions,
     SelectOption,
+    InputOption,
 } from './types.ts';
 import { isGlobal, isDatabase, AppTarget } from '../../lib/app-target.ts';
 import checkbox from '../../lib/checkbox.ts';
@@ -131,16 +132,17 @@ const Config = class {
             ${inputs}
         `;
     }
-    optionInputView({ label, ...props }: { label: string }) {
-        const pname = (props as Option).name as OptionName;
+    optionInputView(args: InputOption) {
+        const { label, ...props } = args;
+        const name = props.name;
+        props['@change'] ??= this.inputOptionChanged.bind(this, name);
         const textInput = textinput(
             Object.assign(props, {
-                '.value': this.state[pname],
-                '@change': this.inputOptionChanged.bind(this, pname),
+                '.value': this.state[name],
             }),
         );
         return html`
-            <p>${textInput} ${this.optionLabel(pname, label)}</p>
+            <p>${textInput} ${this.optionLabel(name, label)}</p>
         `;
     }
     selectOptionsView() {

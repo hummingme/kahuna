@@ -22,6 +22,8 @@
     --nice-color-focus: #a8d4ff;
     --nice-color-hilight: #fbfbac6b;
     --nice-pale-blue: #d7e5f0;
+    --nice-colored-number: #045704;
+    --nice-colored-string: #8c1212;
 }
 :host([data-color-theme='dark']) {
     --nice-grey-100: #3e3e3e;
@@ -39,6 +41,8 @@
     --nice-color-focus: #8617aa;
     --nice-color-hilight: #5c889f6b;
     --nice-pale-blue: #d7e5f0;
+    --nice-colored-number: #7ec699;
+    --nice-colored-string: #a9a2f9;
 }
 :host([data-color-theme='dark']) {
     input[type='checkbox'] {
@@ -63,7 +67,8 @@
         outline: 0px;
         border-color: var(--nice-color-focus);
     }
-    input::placeholder, textarea::placeholder {
+    input::placeholder,
+    textarea::placeholder {
         color: var(--nice-grey-400);
     }
     a[target='_blank']::after {
@@ -74,7 +79,7 @@
     }
     div.about,
     div.update-info {
-        a { 
+        a {
             color: #a2a7e9;
         }
         a:hover {
@@ -263,7 +268,8 @@ button:hover:enabled {
 button:active:enabled {
     border-color: var(--nice-color-focus);
 }
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
     color: var(--nice-grey-500);
     opacity: 1;
     font-style: italic;
@@ -276,6 +282,13 @@ input.warn,
 select.warn {
     outline: 2px dotted var(--nice-color-attention);
 }
+input[type='color'] {
+    height: 1.8em;
+    width: 1.8em;
+    padding: 2px;
+    vertical-align: sub;
+}
+
 hr {
     border-bottom-width: 0;
     color: var(--nice-grey-700);
@@ -310,7 +323,7 @@ nav#menu button.maximize-window {
     background-color: inherit;
 }
 nav#menu a.maximize-icon {
-    margin-left: auto;    
+    margin-left: auto;
 }
 svg#window-maximize {
     margin-right: -9px;
@@ -357,6 +370,12 @@ div#main {
 }
 .left {
     float: left;
+}
+.colored-number {
+    color: var(--nice-colored-number);
+}
+.colored-string {
+    color: var(--nice-colored-string);
 }
 .inline {
     display: inline;
@@ -611,7 +630,7 @@ div#config-layer .option-disabled {
 div#tooltip div.add-ignored {
     margin-bottom: 8px;
 }
-div#tooltip  div.add-ignored button {
+div#tooltip div.add-ignored button {
     margin-left: 10px;
     height: 20px;
 }
@@ -867,7 +886,7 @@ div.modal-window {
     background: inherit;
     border-radius: var(--nice-border-radius);
     border: 2px solid var(--nice-grey-400);
-    user-select: text;    
+    user-select: text;
 }
 div.about {
     > p {
@@ -888,7 +907,7 @@ div.about {
     .footer {
         display: flex;
         flex-direction: row;
-        gap: .6em;
+        gap: 0.6em;
         margin: 3em 0 1em;
         font-size: smaller;
         div.env {
@@ -920,7 +939,7 @@ div.update-info {
 
 div.about,
 div.update-info {
-    a { 
+    a {
         color: #188118;
     }
     a:hover {

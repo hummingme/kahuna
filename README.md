@@ -12,7 +12,7 @@ Kahuna is a browser extension for Firefox and Chromium based browsers to manage 
 * can create new databases, as well as copy and delete existing databases
 * its schema editor can be used to create and delete tables, and to modify the indexes of tables
 * displays the data of a table page by page and enables the editing and deletion of data records
-* filters can be configured and combined for all data fields to display or export a selection of the data contained in a table
+* Filters can be configured and combined for all data fields to display or export a selection of the data contained in a table
 * imports and exports databases in dexie format
 * imports and exports tables in dexie, json and csv format, as well as selected data records in json and csv format
 * enables the entry and execution of arbitrary JavaScript code to modify databases, tables or data

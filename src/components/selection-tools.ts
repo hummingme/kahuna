@@ -38,6 +38,7 @@ const summon = (anchorId: string) => {
         anchorId,
         confirmed: {
             delete: deleteSelection,
+            lfmDeleteEdits: lastfmDeleteAutomaticEdits,
         },
     });
 };
@@ -101,6 +102,24 @@ const view = (): TemplateResult => {
     const { database, table } = datatable.state.target;
     const count = datatable.state.selected.size;
     const topic = configLayer.topic;
+    const lfmDeleteEdits =
+        database == 'last.tidy.iriebob' && table === 'edits'
+            ? html`
+                  <p>
+                      <a @click=${configLayer.onTopicClicked} data-topic="lfmDeleteEdits">
+                          ${svgIcon('tabler-pencil-off')}
+                          <label>delete lfm edits</label>
+                      </a>
+                      ${topic == 'lfmDeleteEdits'
+                          ? configLayer.confirmOption(
+                                `Delete ${count} `,
+                                'automatic edits on last.fm?',
+                                loading,
+                            )
+                          : ''}
+                  </p>
+              `
+            : '';
     return html`
         <p>
             <a @click=${invertSelection} data-topic="invert">
@@ -134,7 +153,35 @@ const view = (): TemplateResult => {
             </a>
             ${topic == 'export' ? exporter.panel() : ''}
         </p>
+        ${lfmDeleteEdits}
     `;
+};
+
+const lastfmDeleteAutomaticEdits = async () => {
+    const { dexieTable, selectorFields, selected } = datatable.state;
+    const collection = getCollection({
+        dexieTable: dexieTable as Table,
+        selectorFields,
+        selected,
+    });
+    await lastfmDeleteAutomaticEditsSelection(collection);
+    datatable.updateDatatable({
+        selected: new Set(),
+    });
+    configLayer.close();
+};
+
+const lastfmDeleteAutomaticEditsSelection = async (selection: Collection) => {
+    const rows = await selection.toArray();
+    const ids = rows.map((r) => r.id);
+    // @ts-expect-error lfm stuff is untested
+    await datatable.state.dexieDB.table('jobs').put({
+        job: 'deleteEdits',
+        state: 'waiting',
+        data: { ids },
+        modified: Date.now(),
+    });
+    return ids.length;
 };
 
 /*
