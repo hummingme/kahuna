@@ -4,7 +4,7 @@
  */
 
 import { messageListener } from './lib/background.ts';
-import { action, namespace, NSPort } from './lib/runtime.ts';
+import { action, NSPort } from './lib/runtime.ts';
 
 type PortMap = Map<number, NSPort>;
 
@@ -27,16 +27,9 @@ action.onClicked.addListener(async (tab, info?) => {
         if (port) port.postMessage({ type: 'toggleVisibility' });
     } else {
         try {
-            if (namespace.scripting) {
-                await namespace.scripting.executeScript({
-                    target: { tabId },
-                    files: ['kahuna.js'],
-                });
-            } else {
-                await namespace.tabs.executeScript({
-                    file: 'kahuna.js',
-                });
-            }
+            await browser.tabs.executeScript({
+                file: 'kahuna.js',
+            });
         } catch (err) {
             throw Error(`failed to execute script: ${err}`);
         }
@@ -44,7 +37,7 @@ action.onClicked.addListener(async (tab, info?) => {
     }
 });
 
-namespace.tabs.onUpdated.addListener(
+browser.tabs.onUpdated.addListener(
     (tabId, changeInfo) => {
         if (changeInfo?.status === 'complete') {
             tabsReady.delete(tabId);
@@ -53,7 +46,7 @@ namespace.tabs.onUpdated.addListener(
     { properties: ['status'] },
 );
 
-namespace.runtime.onConnect.addListener((port) => {
+browser.runtime.onConnect.addListener((port) => {
     if (!port?.sender?.tab?.id) return;
     const tabId = port.sender.tab.id;
     if (port.name === 'main') {

@@ -232,8 +232,16 @@ export const getFuncFilter = (filter: Filter) => {
 
 export const getFuncIndexed = (filter: Filter) => {
     const funcIndexed = methodProperties(filter).funcIndexed;
-    if (typeof funcIndexed === 'string' && isIndexedMethod(filter.method)) {
-        return funcIndexed;
+    if (typeof funcIndexed === 'string') {
+        if (
+            ['equals', 'startsWith'].includes(funcIndexed) &&
+            filter.caseSensitive === false
+        ) {
+            return `${funcIndexed}IgnoreCase`;
+        }
+        if (isIndexedMethod(filter.method)) {
+            return funcIndexed;
+        }
     } else {
         return;
     }
@@ -276,12 +284,14 @@ export const isFilterValid = (val: string, filter: Filter) => {
 };
 
 export const isIndexedFilter = (filter: Filter) => {
-    const indexed =
-        filter.indexed &&
-        isIndexedMethod(filter.method) &&
-        (!caseSensitiveMethods.includes(filter.method) || filter.caseSensitive === true);
-
-    return indexed || isCompoundHeadIndexed(filter);
+    const { indexed, method, caseSensitive } = filter;
+    const isIndexed =
+        indexed &&
+        (isIndexedMethod(method) ||
+            ['equal', 'startswith'].includes(method) ||
+            !caseSensitiveMethods.includes(method) ||
+            caseSensitive === true);
+    return isIndexed || isCompoundHeadIndexed(filter);
 };
 
 const isIndexedMethod = (method: FilterMethod): method is IndexedMethod => {

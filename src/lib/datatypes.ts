@@ -51,19 +51,16 @@ export const maybeQuotedProperty = (prop: string | number) => {
     return (typeof prop === 'number' && isNaN(prop) === false) ||
         (typeof prop === 'string' && unquotedStringProperties.test(prop))
         ? prop
-        : quotedString(String(prop));
+        : quotedProperty(String(prop));
 };
 
-export const quotedString = (val: string) => {
-    if (val.includes("'")) {
-        if (val.includes('"')) {
-            return `"${val.replaceAll('"', '\\"')}"`;
-        } else {
-            return `"${val}"`;
-        }
-    } else {
-        return `'${val}'`;
+const quotedProperty = (val: string) => {
+    if (val.includes("'") && val.includes('"')) {
+        // contains both quotes: escape double quotes and wrap in double quotes
+        return `"${val.replaceAll('"', '\\"')}"`;
     }
+    // otherwise prefer single quotes if possible
+    return val.includes("'") ? `"${val}"` : `'${val}'`;
 };
 
 export const isUnquotedPropertyName = (name: string) =>

@@ -19,7 +19,7 @@ self.onmessage = async (event) => {
         }
     } catch (error) {
         // eslint-disable-next-line no-console
-        console.log('catched', (error as Error).message);
+        console.error('catched', (error as Error).message);
         self.postMessage({ type: 'queryError', error });
     }
     if (topic === 'executeCode') {

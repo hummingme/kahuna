@@ -405,7 +405,8 @@ const JsCodearea = class {
     }
     codeError(error: Error) {
         this.stopLoading();
-        messageStack.displayError(error.toString());
+        const message = error.message.split('\n').shift();
+        messageStack.displayError(`${error.name}: ${message}`);
     }
     clear = () => {
         this[state].code = '';

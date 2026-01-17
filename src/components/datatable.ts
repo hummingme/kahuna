@@ -1298,7 +1298,12 @@ const processQueryResult = async (payload: QueryResultMessagePayload) => {
 
 const onQueryError = (message: Message) => {
     if (message.type === 'queryError') {
-        messageStack.displayError(`Error querying data: ${message.error}`);
+        const error = message.error;
+        const errorText =
+            typeof error === 'string'
+                ? error
+                : `${error.name}: ${error.message.split('\n').shift()}`;
+        messageStack.displayError(`Error querying data: ${errorText}`);
     }
 };
 

@@ -7,7 +7,6 @@ import type { PlainObject } from './types/common.ts';
 import {
     getType,
     maybeQuotedProperty,
-    quotedString,
     typedarrayTypes,
     type TypedArrayType,
 } from './datatypes.ts';
@@ -45,7 +44,6 @@ class ValueFormatter {
      * return a string representation of the given value of type
      *
      * all types that can be stored in IndexedDb are supported
-     * see: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm
      */
     render(value: unknown, type: AllowedType, view: ViewStyle = 'short') {
         return this.#purpose === 'string'
@@ -72,7 +70,7 @@ class ValueFormatter {
         let param = '';
         if (view === 'definite' || (view === 'short' && value.length <= 10)) {
             param = `[${value.toString()}]`;
-            if (['bigint64array', 'biguint64array'].includes(type)) {
+            if (['bigint64array', 'biguint64array'].includes(type) && value.length > 0) {
                 param = param.replaceAll(',', 'n,').replace(']', 'n]');
             }
         } else {
@@ -82,7 +80,7 @@ class ValueFormatter {
     }
     #valueToSource(value: unknown, type: AllowedType) {
         if (typeof value === 'string') {
-            return quotedString(value);
+            return quotedString(value, this.#purpose);
         }
         if (typedarrayTypes.includes(type as TypedArrayType)) {
             return `new ${this.#valueToString(value, type, 'definite')}`;
@@ -95,7 +93,7 @@ class ValueFormatter {
     #quotedStringOrValue(val: unknown) {
         const type = getType(val) as AllowedType;
         return typeof val === 'string'
-            ? quotedString(val)
+            ? quotedString(val, this.#purpose)
             : this.#purpose === 'string'
               ? this.#valueToString(val, type)
               : this.#valueToSource(val, type);
@@ -173,7 +171,7 @@ class ValueFormatter {
         return `Map([${parts.join(', ')}])`;
     }
     regexp(val: RegExp) {
-        const flags = val.flags !== '' ? `, ${val.flags}` : '';
+        const flags = val.flags !== '' ? `, '${val.flags}'` : '';
         return `RegExp(/${val.source}/${flags})`;
     }
     error(val: Error) {
@@ -264,7 +262,12 @@ class ValueFormatter {
         return `GPUCompilationInfo { messages: Array(${val.messages.length})}`;
     }
     cryptokey(val: CryptoKey) {
-        return `CryptoKey { type: "${val.type}", algorithm: ${this.object(val.algorithm)} }`;
+        const typeString = val.type ? `"${val.type}"` : '';
+        const algorithmString =
+            typeof val.algorithm === 'object'
+                ? ` , algorithm: ${this.object(val.algorithm)}`
+                : '';
+        return `CryptoKey { ${typeString}${algorithmString} }`;
     }
     videoframe(val: VideoFrame) {
         return `VideoFrame { format: "${val.format}" }`;
@@ -317,6 +320,59 @@ class ValueFormatter {
         }
         return true;
     }
+}
+
+const rxLineTerminator = /[\n\r\u2028\u2029]/;
+function quotedString(val: string, purpose: 'string' | 'source') {
+    if (purpose === 'string') {
+        if (val.includes("'") && val.includes('"')) {
+            return `"${val.replaceAll('"', '\\"')}"`;
+        }
+        return val.includes("'") ? `"${val}"` : `'${val}'`;
+    } else {
+        // purpose === 'code'
+        if (rxLineTerminator.test(val)) {
+            val = val.replaceAll('`', '\`').replaceAll('${', '\${');
+            return `\`${escapeForTemplateLiteral(val)}\``;
+        } else {
+            return val.includes("'")
+                ? `"${escapeForQuotedString(val)}"`
+                : `'${escapeForQuotedString(val, false)}'`;
+        }
+    }
+}
+
+const rxTemplateLiteral = /[`\\]|\$\{/g;
+function escapeForTemplateLiteral(value: string): string {
+    return value.replace(rxTemplateLiteral, (match) =>
+        match === '${' ? '\\${' : '\\' + match,
+    );
+}
+
+const rxDoubleQuoted = /["\\\n\r\u2028\u2029]/g;
+const rxSingleQuoted = /['\\\n\r\u2028\u2029]/g;
+function escapeForQuotedString(value: string, doubleQuoted: boolean = true): string {
+    const pattern = doubleQuoted ? rxDoubleQuoted : rxSingleQuoted;
+    return value.replace(pattern, (ch) => {
+        switch (ch) {
+            case '"':
+                return '\\"';
+            case "'":
+                return "\\'";
+            case '\\':
+                return '\\\\';
+            case '\n':
+                return '\\n';
+            case '\r':
+                return '\\r';
+            case '\u2028':
+                return '\\u2028';
+            case '\u2029':
+                return '\\u2029';
+            default:
+                return ch;
+        }
+    });
 }
 
 export const stringFormatter = new ValueFormatter();

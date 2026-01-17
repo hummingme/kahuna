@@ -20,12 +20,12 @@ class UpdateInfo extends ModalWindow {
             visibilityProperty: 'updateInfoVisible',
         });
     }
-    static version = '1.5.1';
+    static version = '1.5.2';
     view() {
         const content = html`
             <div class="update-info">
                 <div>
-                    <h1>Kahuna has been updated to version ${build.version} 🌞</h1>
+                    <h1>Kahuna has been updated to version ${build.version} 🍻</h1>
                     ${paragraph(this.paragraphs[0], this.links())}
                     ${paragraph(this.paragraphs[1], this.links())}
                     ${paragraph(this.paragraphs[2], this.links())}
@@ -39,25 +39,25 @@ class UpdateInfo extends ModalWindow {
         return super.node(content);
     }
     readonly paragraphs = [
-        `I felt like it was time for a maintenance release and so the bug fixes and
-        smaller improvements from the last 2 months are collected in this version.
-        As an immediately visible change, strings and numbers are now highlighted
-        in color when displayed. The colors used can be [configured] according to
-        personal preferences. The full list of changes and bug fixes can be found
-        in the [CHANGELOG].`,
-        `I'd love to hear your feedback! If you enjoy using Kahuna, please consider
-        rating on the [Chrome Web Store] or the [Firefox Add-ons] site. Or show your
-        support with a ⭐ on [GitHub]!`,
-        `Something not working as expected? Missing a feature you really need? Opening
-        an [issue or feature request] on GitHub with as much detail as possible is the
-        first step to getting it resolved.`,
+        `It's been a while, so I thought it was time for a new maintenance release
+        with the bug fixes from the last few weeks. There's nothing particularly
+        exciting here, except perhaps the fix for an error that occurred when
+        editing data containing a string with line breaks. Plus, some
+        case-insensitive filters were accelerated. The full list of changes and bug
+        fixes can be found in the [CHANGELOG].`,
+
+        `What are your biggest pain points when developing with IndexedDB databases,
+        and how could Kahuna help eliminate them? Are there any features in this
+        extension that you find buggy or incomplete? I can't promise anything, but
+        if you tell me about it, there's a good chance that a solution can be found.
+        Just open an [issue or feature request] on GitHub.`,
+
+        `Also, if you enjoy using Kahuna, please consider leaving a rating on the
+        [Chrome Web Store] or the [Firefox Add-ons] site. Or show your support with
+        a ⭐ on [GitHub]!`,
     ];
     links(): Map<string, string> {
         return new Map([
-            [
-                'configured',
-                'https://hummingme.github.io/kahuna-docs/configuration/#application',
-            ],
             ['changelog', 'https://github.com/hummingme/kahuna/blob/main/CHANGELOG.md'],
             [
                 'chrome web store',

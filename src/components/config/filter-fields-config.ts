@@ -294,12 +294,17 @@ const FilterFieldsConfig = class {
         return checkboxes;
     }
     relatedOptionCheckboxes(filter: Filter) {
-        if (caseSensitiveMethods.includes(filter.method) && filter.field !== '*key*') {
+        const { field, method, caseSensitive } = filter;
+        if (field !== '*key*' && caseSensitiveMethods.includes(method)) {
             const className =
-                this[state].markUnindexed && !filter.caseSensitive ? 'warn' : null;
+                this[state].markUnindexed &&
+                !caseSensitive &&
+                !['equal', 'startswith'].includes(method)
+                    ? 'warn'
+                    : null;
             return [['caseSensitive', 'case sensitive', className]];
         }
-        if (['below', 'above'].includes(filter.method)) {
+        if (['below', 'above'].includes(method)) {
             return [['includeBounds', 'include bounds', null]];
         }
         return [];

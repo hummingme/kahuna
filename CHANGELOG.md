@@ -1,3 +1,12 @@
+# v1.5.2
+- released on 2026/01/17
+- Case-insensitive 'equals' and 'startsWith' filters are accelerated by using equalsIgnoreCase() and startsWithIgnoreCase()
+- Bugfix: the view of empty BigInt64Arrays values has been corrected
+- Bugfix: the view of RegExp values has been corrected
+- Bugfix: use template literals for strings including line terminator characters for the javascript source in edit data row (fixes [issue #1](https://github.com/hummingme/kahuna/issues/1))
+- Improved error reporting when an error occurs during code execution in the worker
+- Bugfix: avoid errors when displaying CryptoKey values
+
 # v1.5.1
 - released on 2025/10/17
 - Highlight string and number values by color when displaying in the datatable
