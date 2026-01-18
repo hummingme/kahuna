@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: MPL-2.0
  * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
  */
-import type { Collection, Table } from 'dexie';
+import type { Table } from 'dexie';
 import { html, type TemplateResult } from 'lit-html';
 import configLayer from './configlayer.ts';
 import exporter from './exporter.ts';
@@ -19,11 +19,13 @@ import type { Filter } from '../lib/filter.ts';
 import { applyFilters } from '../lib/querydata.ts';
 import svgIcon from '../lib/svgicon.ts';
 import { rowSelector } from '../lib/row-selection.ts';
+import { scrubblerDelete, scrubblerTopic } from '../lib/scrubbler.ts';
 import { addNestedValues, removeNestedValues, resolvePath } from '../lib/utils.ts';
 import type { PlainObject } from '../lib/types/common.ts';
 
 const summon = (anchorId: string) => {
     const { target, dexieTable, selectorFields, selected } = datatable.state;
+    if (!dexieTable) return;
     exporter.init({
         usage: 'selection',
         target,
@@ -38,7 +40,7 @@ const summon = (anchorId: string) => {
         anchorId,
         confirmed: {
             delete: deleteSelection,
-            lfmDeleteEdits: lastfmDeleteAutomaticEdits,
+            scrubblerDelete: scrubblerDelete.bind(dexieTable.name),
         },
     });
 };
@@ -99,27 +101,9 @@ const deleteSelection = async () => {
 
 const view = (): TemplateResult => {
     const { loading } = appStore.state;
-    const { database, table } = datatable.state.target;
+    const { table } = datatable.state.target;
     const count = datatable.state.selected.size;
     const topic = configLayer.topic;
-    const lfmDeleteEdits =
-        database == 'last.tidy.iriebob' && table === 'edits'
-            ? html`
-                  <p>
-                      <a @click=${configLayer.onTopicClicked} data-topic="lfmDeleteEdits">
-                          ${svgIcon('tabler-pencil-off')}
-                          <label>delete lfm edits</label>
-                      </a>
-                      ${topic == 'lfmDeleteEdits'
-                          ? configLayer.confirmOption(
-                                `Delete ${count} `,
-                                'automatic edits on last.fm?',
-                                loading,
-                            )
-                          : ''}
-                  </p>
-              `
-            : '';
     return html`
         <p>
             <a @click=${invertSelection} data-topic="invert">
@@ -153,35 +137,8 @@ const view = (): TemplateResult => {
             </a>
             ${topic == 'export' ? exporter.panel() : ''}
         </p>
-        ${lfmDeleteEdits}
+        ${scrubblerTopic(topic, count, loading)}
     `;
-};
-
-const lastfmDeleteAutomaticEdits = async () => {
-    const { dexieTable, selectorFields, selected } = datatable.state;
-    const collection = getCollection({
-        dexieTable: dexieTable as Table,
-        selectorFields,
-        selected,
-    });
-    await lastfmDeleteAutomaticEditsSelection(collection);
-    datatable.updateDatatable({
-        selected: new Set(),
-    });
-    configLayer.close();
-};
-
-const lastfmDeleteAutomaticEditsSelection = async (selection: Collection) => {
-    const rows = await selection.toArray();
-    const ids = rows.map((r) => r.id);
-    // @ts-expect-error lfm stuff is untested
-    await datatable.state.dexieDB.table('jobs').put({
-        job: 'deleteEdits',
-        state: 'waiting',
-        data: { ids },
-        modified: Date.now(),
-    });
-    return ids.length;
 };
 
 /*

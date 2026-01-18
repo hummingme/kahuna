@@ -332,7 +332,6 @@ function quotedString(val: string, purpose: 'string' | 'source') {
     } else {
         // purpose === 'code'
         if (rxLineTerminator.test(val)) {
-            val = val.replaceAll('`', '\`').replaceAll('${', '\${');
             return `\`${escapeForTemplateLiteral(val)}\``;
         } else {
             return val.includes("'")

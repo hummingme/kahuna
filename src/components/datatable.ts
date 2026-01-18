@@ -47,6 +47,7 @@ import {
 } from '../lib/filter.ts';
 import messenger from '../lib/messenger.ts';
 import { queryData, type QueryDataArgs } from '../lib/querydata.ts';
+import { checkScrubbler } from '../lib/scrubbler.ts';
 import { selectbox } from '../lib/selectbox.ts';
 import {
     rowSelector,
@@ -191,6 +192,7 @@ const Datatable = class {
             requiredVariables: async () =>
                 await codeareaRequiredVariables(datatable.state),
         });
+        await checkScrubbler(target);
         await this.updateDatatable(initialState);
         appStore.update({ selectedTable });
 

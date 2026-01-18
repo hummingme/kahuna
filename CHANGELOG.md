@@ -1,5 +1,5 @@
 # v1.5.2
-- released on 2026/01/17
+- released on 2026/01/18
 - Case-insensitive 'equals' and 'startsWith' filters are accelerated by using equalsIgnoreCase() and startsWithIgnoreCase()
 - Bugfix: the view of empty BigInt64Arrays values has been corrected
 - Bugfix: the view of RegExp values has been corrected

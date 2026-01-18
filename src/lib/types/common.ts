@@ -9,6 +9,8 @@ export interface PlainObject {
     [key: string]: any;
 }
 
+export type UnknownRecord = Record<string, unknown>;
+
 export interface PlainObjectOf<T> {
     [key: string]: T;
 }
