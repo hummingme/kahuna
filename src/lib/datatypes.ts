@@ -1,15 +1,15 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import type { PlainObject } from './types/common.ts';
-import type { AllowedType } from './value-formatter.ts';
+import { UnknownRecord } from '#types';
+import { escapeLF } from './escape-unicode';
+import type { AllowedType } from '#lib/value-formatter';
 
 /**
  * get type of value as lowercase string
  */
-const objectRegexp = /^\[object (\S+)\]$/;
 export const getType = (val: unknown): AllowedType => {
     const type = typeof val;
     // all primitives and function
@@ -17,11 +17,12 @@ export const getType = (val: unknown): AllowedType => {
         return type as AllowedType;
     }
     // everything else
-    return Object.prototype.toString
-        .call(val)
-        .replace(objectRegexp, '$1')
-        .toLowerCase() as AllowedType;
+    return prototypeName(val).toLowerCase() as AllowedType;
 };
+
+function prototypeName(value: unknown): string {
+    return Object.prototype.toString.call(value).slice(8, -1);
+}
 
 /**
  * compare values of types that are supported as index
@@ -36,10 +37,7 @@ export const compareIndexValues = (a: never, b: never): boolean => {
     if (['number', 'string'].includes(ta)) {
         return a === b;
     }
-    if (
-        ['array', 'date', 'arraybuffer'].includes(ta) ||
-        typedarrayTypes.includes(ta as TypedArrayType)
-    ) {
+    if (['array', 'date', 'arraybuffer'].includes(ta) || isTypedArrayType(ta)) {
         return JSON.stringify(a) === JSON.stringify(b);
     }
     return false;
@@ -49,19 +47,26 @@ const unquotedStringProperties = /^[_$a-zA-Z\xA0-\uFFFF][_$a-zA-Z0-9\xA0-\uFFFF]
 
 export const maybeQuotedProperty = (prop: string | number) => {
     return (typeof prop === 'number' && isNaN(prop) === false) ||
-        (typeof prop === 'string' && unquotedStringProperties.test(prop))
+        (typeof prop === 'string' &&
+            (isArrayIndex(prop) || unquotedStringProperties.test(prop)))
         ? prop
-        : quotedProperty(String(prop));
+        : quotedProperty(escapeLF(String(prop)));
 };
 
-const quotedProperty = (val: string) => {
-    if (val.includes("'") && val.includes('"')) {
-        // contains both quotes: escape double quotes and wrap in double quotes
-        return `"${val.replaceAll('"', '\\"')}"`;
+const quotedProperty = (val: string, doubleQuotes?: boolean) => {
+    if (doubleQuotes || val.includes("'")) {
+        if (val.includes('"')) {
+            return `"${val.replaceAll('"', '\\"')}"`;
+        } else {
+            return `"${val}"`;
+        }
+    } else {
+        return `'${val}'`;
     }
-    // otherwise prefer single quotes if possible
-    return val.includes("'") ? `"${val}"` : `'${val}'`;
 };
+
+const isArrayIndex = (val: string) =>
+    String(Number(val)) === val && Number.isInteger(Number(val)) && Number(val) >= 0;
 
 export const isUnquotedPropertyName = (name: string) =>
     unquotedStringProperties.test(name);
@@ -76,11 +81,48 @@ export const typedarrayTypes = [
     'uint8clampedarray',
     'bigint64array',
     'biguint64array',
+    'float16array',
     'float32array',
     'float64array',
 ] as const;
 
 export type TypedArrayType = (typeof typedarrayTypes)[number];
+
+export type AnyTypedArray =
+    | Uint8Array
+    | Uint8ClampedArray
+    | Int8Array
+    | Uint16Array
+    | Int16Array
+    | Uint32Array
+    | Int32Array
+    | Float16Array
+    | Float32Array
+    | Float64Array
+    | BigInt64Array
+    | BigUint64Array;
+
+export function isTypedArray(value: unknown): value is AnyTypedArray {
+    return (
+        value != null &&
+        typeof value === 'object' &&
+        'buffer' in value &&
+        value.buffer instanceof ArrayBuffer
+    );
+}
+
+export function isTypedArrayType(type: AllowedType): type is TypedArrayType {
+    return typedarrayTypes.includes(type as TypedArrayType);
+}
+
+export function isArrayBuffer(value: unknown): value is ArrayBuffer {
+    // cross-realm save check as needed for uploaded values
+    return getType(value) === 'arraybuffer';
+}
+
+export function isDataView(value: unknown): value is DataView {
+    return getType(value) === 'dataview';
+}
 
 /*
  * Data types for which the old row.prop value is used in datatable.editRow()
@@ -97,15 +139,10 @@ export const typesFromRow = [
     'filelist',
     'filesystemdirectoryhandle',
     'filesystemfilehandle',
-    'gpucompilationmessage',
-    'gpucompilationinfo',
     'cryptokey',
-    'videoframe',
-    'audiodata',
-    'croptarget',
 ] as const;
 
-export const shallowEqual = (object1: PlainObject, object2: PlainObject) => {
+export const shallowEqual = (object1: UnknownRecord, object2: UnknownRecord) => {
     if (!isPlainObject(object1) || !isPlainObject(object2)) {
         return false;
     }
@@ -124,12 +161,100 @@ export const shallowEqual = (object1: PlainObject, object2: PlainObject) => {
     return true;
 };
 
-export const isPlainObject = (value: any) => value?.constructor === Object;
+export const isPlainObject = (
+    value: unknown,
+): value is Record<string | number, unknown> => {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        (value.constructor === Object ||
+            Object.getPrototypeOf(value) === Object.prototype)
+    );
+};
 
-export const isEmptyObject = (value: any) => {
+export const isEmptyObject = (value: unknown) => {
     if (!isPlainObject(value)) return false;
     for (const property in value) {
         if (Object.hasOwn(value, property)) return false;
     }
     return true;
 };
+
+export const isJsonSerializable = (value: unknown): boolean => {
+    if (
+        value === null ||
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+    ) {
+        return true;
+    }
+    if (Array.isArray(value)) {
+        return value.every(isJsonSerializable);
+    }
+    if (typeof value === 'object' && isPlainObject(value) === false) {
+        return false;
+    }
+    if (typeof value === 'object' && value !== null) {
+        return Object.values(value).every(isJsonSerializable);
+    }
+    return false;
+};
+
+export const isJsonSerializableArray = (value: unknown): value is unknown[] =>
+    Array.isArray(value) && value.every(isJsonSerializable);
+
+export const isNumber = (value: unknown) => Number.isNaN(Number(value)) === false;
+
+// true for array, typed array, map, and set values
+export function hasValuesIterator(
+    value: unknown,
+): value is { values(): IterableIterator<unknown> } {
+    return (
+        value != null &&
+        typeof value === 'object' &&
+        'values' in value &&
+        typeof value.values === 'function' &&
+        Symbol.iterator in value &&
+        typeof value[Symbol.iterator] === 'function'
+    );
+}
+
+export function sizeOrLength(value: unknown): number | undefined {
+    if (typeof value === 'string') {
+        return value.length;
+    }
+    if (
+        typeof value === 'object' &&
+        value !== null &&
+        ('length' in value || 'size' in value || 'byteLength' in value)
+    ) {
+        const size =
+            'length' in value
+                ? value.length
+                : 'size' in value
+                  ? value.size
+                  : value.byteLength;
+        return Number(size);
+    }
+}
+
+export function isBlobLike(value: unknown): value is Blob {
+    return (
+        prototypeName(value) === 'Blob' &&
+        typeof (value as Blob).size === 'number' &&
+        typeof (value as Blob).arrayBuffer === 'function' &&
+        typeof (value as Blob).slice === 'function'
+    );
+}
+
+export function isFileLike(value: unknown): value is File {
+    return (
+        prototypeName(value) === 'File' &&
+        typeof (value as File).name === 'string' &&
+        typeof (value as Blob).size === 'number' &&
+        typeof (value as Blob).arrayBuffer === 'function' &&
+        typeof (value as Blob).slice === 'function'
+    );
+}

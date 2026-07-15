@@ -1,12 +1,15 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
-import appWindow from './app-window.ts';
-import Layer from './layer.ts';
-import appStore from '../lib/app-store.ts';
+import { ref } from 'lit/directives/ref.js';
+
+import appWindow from '#components/app-window';
+import Layer from '#components/layer';
+import appStore from '#lib/app-store';
+import Draggable from '#lib/draggable';
 
 interface ModalWindowState {
     visible: boolean;
@@ -20,13 +23,14 @@ const state = Symbol('modal window state');
 
 class ModalWindow {
     [state]: ModalWindowState;
-    #layer: Layer;
+    #layer;
     #options: ModalWindowOptions;
 
     constructor(options: ModalWindowOptions = {}) {
         this[state] = this.#initState;
         this.#options = options;
-        this.#layer = new Layer({ closeHandler: this.close.bind(this) });
+        const DraggableLayer = Draggable(Layer);
+        this.#layer = new DraggableLayer({ closeHandler: this.close.bind(this) });
     }
     get #initState() {
         return {
@@ -69,8 +73,15 @@ class ModalWindow {
             this.show();
         }
         return html`
-            <div class="modal-window layer">${content}</div>
+            <div class="modal-window layer" ${ref(this.nodeReady.bind(this))}>
+                ${content}
+            </div>
         `;
+    }
+    nodeReady(node?: Element) {
+        if (node instanceof HTMLElement) {
+            this.#layer.makeDraggable(node);
+        }
     }
 }
 

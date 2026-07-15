@@ -1,21 +1,24 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, TemplateResult } from 'lit-html';
-import appStore from '../lib/app-store.ts';
-import configLayer from './configlayer.ts';
-import databaseTools from './database-tools.ts';
-import datatable from './datatable.ts';
-import messageStack from './messagestack.ts';
-import tableTools from './table-tools.ts';
-import displayConfigControl from './config/config-control.ts';
-import { symbolButton } from '../lib/button.ts';
-import { closeDB, getDB, getConnection } from '../lib/connection.ts';
-import { shallowEqual } from '../lib/datatypes.ts';
-import { tableIndexesSpec } from '../lib/dexie-utils.ts';
-import type { KTable, PlainObject } from '../lib/types/common.ts';
+
+import configLayer from '#components/configlayer';
+import databaseTools from '#components/database-tools';
+import datatable from '#components/datatable';
+import { escapeUnicode } from '#lib/escape-unicode';
+import messageStack from '#components/messagestack';
+import tableTools from '#components/table-tools';
+import displayConfigControl from '#components/config/config-control';
+import appStore from '#lib/app-store';
+import { symbolButton } from '#lib/button';
+import { closeDB, getDB, getConnection } from '#lib/connection';
+import { shallowEqual } from '#lib/datatypes';
+import { tableIndexesSpec } from '#lib/dexie-utils';
+import { rowIndex } from '#lib/utils';
+import type { KTable, Schema } from '#types';
 
 interface DBState {
     dbname: string;
@@ -83,7 +86,7 @@ const template = function (tables: KTable[]): TemplateResult {
         return html`
             <h1 class="precis">
                 Database
-                <i>${dbstate.dbname}</i>
+                <i>${escapeUnicode(dbstate.dbname)}</i>
                 contains ${cnt} ${notation}:
             </h1>
             ${tablesTableTemplate(tables)}
@@ -92,7 +95,7 @@ const template = function (tables: KTable[]): TemplateResult {
         return html`
             <div class="lonely">
                 Please be patient while the tables from
-                <i>${dbstate.dbname}</i>
+                <i>${escapeUnicode(dbstate.dbname)}</i>
                 are loaded!
             </div>
         `;
@@ -100,7 +103,7 @@ const template = function (tables: KTable[]): TemplateResult {
         return html`
             <div class="lonely">
                 There are no tables in the database
-                <i>${dbstate.dbname}</i>
+                <i>${escapeUnicode(dbstate.dbname)}</i>
                 !
             </div>
             <div class="lonely">
@@ -117,9 +120,10 @@ const tablesTableTemplate = function (tables: KTable[]): TemplateResult {
 
     tables.forEach((table, idx) => {
         const idxstr = table.indexes.map((i) => i.src).join(', ');
+        const tableName = escapeUnicode(table.name);
         rows.push(html`
-            <tr data-tableindex=${idx} title="click to load the table ${table.name}">
-                <td>${table.name}</td>
+            <tr title="click to load the table ${tableName}">
+                <td>${tableName}</td>
                 <td class="center">${table.primKey.src}</td>
                 <td class="wrap">${idxstr}</td>
                 <td class="center">${table.count}</td>
@@ -152,10 +156,9 @@ const tablesTableTemplate = function (tables: KTable[]): TemplateResult {
 
 const onTbodyClicked = (event: Event) => {
     const target = event.target as HTMLElement;
-    const td = target.closest('td');
-    const tr = target.closest('tr');
-    if (tr?.dataset?.tableindex) {
-        const tableIdx = parseInt(tr.dataset.tableindex);
+    const tableIdx = rowIndex(target);
+    if (tableIdx !== -1) {
+        const td = target.closest('td');
         if (td?.firstElementChild && td.classList.contains('row-icons')) {
             const anchorId = td.firstElementChild.id;
             tableTools.summon(tableIdx, anchorId);
@@ -170,11 +173,10 @@ const createClicked = async () => {
     configLayer.toggleTopic('create');
 };
 
-const schema = (tables: KTable[]): PlainObject => {
-    return tables.reduce((result, table) => {
-        result[table.name] = tableIndexesSpec(table);
-        return result;
-    }, {} as PlainObject);
+const schema = (tables: KTable[]): Schema => {
+    return Object.fromEntries(
+        tables.map((table) => [table.name, tableIndexesSpec(table)]),
+    );
 };
 
 const databaseTables = async (databaseName: string) => {
@@ -191,7 +193,7 @@ const addTable = async (databaseName: string, tableName: string, indexes: string
     await changeSchema(databaseName, dbSchema);
 };
 
-const changeSchema = async (databaseName: string, newSchema: PlainObject) => {
+const changeSchema = async (databaseName: string, newSchema: Schema) => {
     const dbHandle = await getConnection(databaseName);
     const tablesCount = dbHandle.tables.length;
     const version = dbHandle.verno;

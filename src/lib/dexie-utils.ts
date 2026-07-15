@@ -1,13 +1,15 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import type { Collection, IndexSpec, Table } from 'dexie';
-import { isPlainObject } from './datatypes.ts';
-import { selectedPrimKeys } from './row-selection.ts';
-import { KTable, PlainObject } from './types/common.ts';
-import { getConnection } from './connection.ts';
+
+import { getConnection } from '#lib/connection';
+import { isPlainObject } from '#lib/datatypes';
+import { rowSelector, selectedPrimKeys } from '#lib/row-selection';
+import { addNestedValues, removeNestedValues } from '#lib/utils';
+import { KTable, UnknownRecord } from '#types';
 
 export const isPrimKeyUnnamed = (primKey: IndexSpec): boolean =>
     primKey.name === null || primKey.name.length === 0;
@@ -24,7 +26,7 @@ export const isPrimKeyCompound = (primKey: IndexSpec): boolean =>
 export const collectionToArray = async (
     collection: Collection | Table,
     addUnnamedPk: boolean,
-): Promise<PlainObject[]> => {
+): Promise<UnknownRecord[]> => {
     const data = addUnnamedPk
         ? await includeUnnamedPkValues(collection)
         : await collection.toArray();
@@ -108,7 +110,7 @@ export const copyTableData = async (
     if (sourceTable && targetTable) {
         const primKeyNamed = isPrimKeyNamed(sourceTable.schema.primKey);
         let skip = 0;
-        let data: object[] = [];
+        let data: object[];
         do {
             const collection = sourceTable.offset(skip).limit(CHUNKSIZE);
             data = (await collectionToArray(collection, !primKeyNamed)) as object[];
@@ -124,5 +126,32 @@ export const copyTableData = async (
             }
             skip += CHUNKSIZE;
         } while (data.length === CHUNKSIZE);
+    }
+};
+
+export const dexieExportFilter = (
+    dexieTable: Table,
+    selectorFields: string[],
+    selected: Set<string | number>,
+) => {
+    const pkUnnamed = isPrimKeyUnnamed(dexieTable.schema.primKey);
+    const paths = selectorFields.filter((sf) => sf.includes('.'));
+    if (pkUnnamed) {
+        return (dtable: string, _values: any, key: any) => {
+            return dtable === dexieTable.name && selected.has(key);
+        };
+    } else if (paths.length === 0) {
+        return (dtable: string, values: any) => {
+            const selector = rowSelector(selectorFields, values);
+            return dtable === dexieTable.name && selected.has(selector);
+        };
+    } else {
+        // paths.length > 0
+        return (dtable: string, values: any) => {
+            addNestedValues(values, paths);
+            const selector = rowSelector(selectorFields, values);
+            removeNestedValues(values, paths);
+            return dtable === dexieTable.name && selected.has(selector);
+        };
     }
 };

@@ -1,11 +1,12 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
-import { type Table } from 'dexie';
-import { isPrimKeyNamed, isPrimKeyCompound } from '../lib/dexie-utils.ts';
-import { replacer, reviver } from './json-wrapper.ts';
-import type { PlainObject } from './types/common.ts';
+import { type IndexableType, Table } from 'dexie';
+
+import { isPrimKeyNamed, isPrimKeyCompound } from '#lib/dexie-utils';
+import { replacer, reviver } from '#lib/json-wrapper';
+import type { UnknownRecord } from '#types';
 
 /*
  * return array of fields to uniquely identify rows
@@ -26,22 +27,22 @@ export const rowSelectorFields = (table: Table): string[] => {
  */
 export const rowSelector = (
     selectorFields: string[],
-    rowData: PlainObject,
+    rowData: UnknownRecord,
 ): number | string => {
     const pk = rowSelectorPrimKey(selectorFields, rowData);
     return typeof pk === 'number' ? pk : JSON.stringify(pk, replacer);
 };
 
 /**
- * returns the valu or array of values sfrom rowData of the primaryKey
+ * returns the value or array of values from rowData of the primaryKey
  */
 export const rowSelectorPrimKey = (
     selectorFields: string[],
-    rowData: PlainObject,
-): any | any[] => {
+    rowData: UnknownRecord,
+): IndexableType => {
     return selectorFields.length === 1
-        ? rowData[selectorFields[0]]
-        : selectorFields.map((field) => rowData[field]);
+        ? (rowData[selectorFields[0]] as IndexableType)
+        : (selectorFields.map((field) => rowData[field]) as IndexableType);
 };
 
 /*

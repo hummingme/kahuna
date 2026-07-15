@@ -1,9 +1,9 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { PlainObject } from './types/common.ts';
+import { RecordOf, UnknownRecord } from '#types';
 
 /**
  * return num if it is within min/max,
@@ -16,6 +16,8 @@ export const clamp = (num: number, min: number, max: number): number => {
 
 export const between = (num: number, min: number, max: number): boolean =>
     num >= min && num <= max;
+
+export const plural = (count: number): string => (count > 1 ? 's' : '');
 
 export const capitalize = (value: string): string =>
     value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
@@ -47,7 +49,7 @@ export const escapeRegExp = (str: string) => {
  * return the properties that differ in two objects
  */
 
-export const getDifference = (a: PlainObject, b: PlainObject): PlainObject =>
+export const getDifference = (a: UnknownRecord, b: UnknownRecord): UnknownRecord =>
     Object.fromEntries(
         Object.entries(b).filter(([key, val]) => key in a && a[key] !== val),
     );
@@ -57,7 +59,7 @@ export const getDifference = (a: PlainObject, b: PlainObject): PlainObject =>
  * from https://stackoverflow.com/a/43849204
  */
 export const resolvePath = (
-    object: PlainObject,
+    object: UnknownRecord,
     path: string,
     defaultValue: any = undefined,
 ): any => path.split('.').reduce((o, p) => (o ? o[p] : defaultValue), object);
@@ -65,41 +67,60 @@ export const resolvePath = (
 /*
  * setPath({}, 'a.b.c', 1) => {a:{b:{c:1}}}
  */
-export const setPath = (object: PlainObject, path: string, value: any): PlainObject =>
-    path
-        .split('.')
-        .reduce(
-            (o, p, i) => (o[p] = path.split('.').length === ++i ? value : o[p] || {}),
-            object,
-        );
+export const setPath = (obj: UnknownRecord, path: string, value: any): UnknownRecord => {
+    const parts = path.split('.');
+    parts.reduce((o, p, i) => (o[p] = parts.length === i + 1 ? value : o[p] || {}), obj);
+    return obj;
+};
 
-export const addNestedValues = (row: PlainObject, paths: string[]) => {
+export const addNestedValues = (row: UnknownRecord, paths: string[]) => {
     paths.forEach((path: string) => {
         row[path] = resolvePath(row, path);
     });
-    return row;
 };
 
-export const removeNestedValues = (row: PlainObject, paths: string[]): PlainObject => {
+export const removeNestedValues = (row: UnknownRecord, paths: string[]) => {
     paths.forEach((path) => {
         delete row[path];
     });
-    return row;
 };
 
 /*
  * zipObject(['a', 'b', 'c'], [1, 2, 3]);  // {a: 1, b: 2, c: 3}
  */
-export const zipObject = (props: string[], values: any[]): PlainObject =>
+export const zipObject = (props: string[], values: any[]): UnknownRecord =>
     props.reduce(
-        (obj: PlainObject, prop, index) => ((obj[prop] = values[index]), obj),
+        (obj: UnknownRecord, prop, index) => ((obj[prop] = values[index]), obj),
         {},
     );
 
-export const pickProperties = (obj: PlainObject, props: string[]): PlainObject =>
-    Object.assign({}, ...props.map((prop) => ({ [prop]: obj[prop] })));
+export const pickProperties = <T extends object, K extends keyof T>(
+    obj: T,
+    props: K[],
+): Pick<T, K> => {
+    const result = {} as Pick<T, K>;
+    for (const key of props) {
+        if (key in obj) {
+            result[key] = obj[key];
+        }
+    }
+    return result;
+};
 
-export const selfMap = (arr: string[]): PlainObject =>
+export const pickByKeys = <T extends object, S extends object>(
+    obj: T,
+    source: S,
+): Pick<T, Extract<keyof T, keyof S>> => {
+    const result = {} as any;
+    for (const key in source) {
+        if (key in obj) {
+            result[key] = obj[key as unknown as keyof T];
+        }
+    }
+    return result;
+};
+
+export const selfMap = (arr: readonly string[]): RecordOf<string> =>
     Object.fromEntries(arr.map((f) => [f, f]));
 
 /*
@@ -137,3 +158,8 @@ export const uniqueId = (): string => (Math.random() * 1000000 * Date.now()).toS
 
 export const sleep = (delay: number) =>
     new Promise((resolve) => setTimeout(resolve, delay));
+
+export const rowIndex = (node: HTMLElement) => {
+    const tr = node.closest('tr');
+    return tr && tr.rowIndex !== -1 ? tr.rowIndex - 1 : -1;
+};

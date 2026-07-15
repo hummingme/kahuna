@@ -1,6 +1,6 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import type { Table } from 'dexie';
@@ -8,42 +8,45 @@ import { nothing } from 'lit';
 import { html } from 'lit-html';
 import { map } from 'lit/directives/map.js';
 
-import datatable from '../datatable.ts';
-import FiltersConfig from './filters-config.ts';
-import type { ControlInstance } from './types.ts';
-import { type AppTarget, isTable } from '../../lib/app-target.ts';
-import { symbolButton } from '../../lib/button.ts';
-import checkbox from '../../lib/checkbox.ts';
-import { type Column } from '../../lib/column.ts';
-import { getConnection } from '../../lib/connection.ts';
-import { isEmptyObject } from '../../lib/datatypes.ts';
+import FiltersConfig from '#components/config/filters-config';
+import type { ControlInstance } from '#components/config/types';
+import datatable from '#components/datatable';
+import { isTable } from '#lib/app-target';
+import { symbolButton } from '#lib/button';
+import checkbox from '#lib/checkbox';
+import { type Column } from '#lib/column';
+import { getConnection } from '#lib/connection';
+import { isEmptyObject } from '#lib/datatypes';
+import {
+    defaultFilterOptions,
+    emptyFilter,
+    initialFilter,
+    searchMethods,
+} from '#lib/filter';
+import { selectbox } from '#lib/selectbox';
+import settings from '#lib/settings';
+import { capitalize, pickByKeys } from '#lib/utils';
+import type { AppTarget } from '#types/common';
 import {
     caseSensitiveMethods,
     compoundHeadIndexedMethods,
-    defaultFilterOptions,
-    emptyFilter,
-    FilterDefaultOptions,
+    CompoundHeadIndexedMethod,
     indexedMethods,
-    initialFilter,
-    searchMethods,
-    type CompoundHeadIndexedMethod,
     type Filter,
+    type FilterDefaultOptions,
     type FilterEmptyMethod,
     type FilterMethod,
     type IndexedMethod,
-} from '../../lib/filter.ts';
-import { selectbox } from '../../lib/selectbox.ts';
-import settings from '../../lib/settings.ts';
-import { capitalize, pickProperties } from '../../lib/utils.ts';
+} from '#types/filter';
 
-interface FilterFieldsConfigState {
+type FilterFieldsConfigState = {
     filters: Filter[];
     columns: Column[];
     filtersBefore: Filter[];
     rememberedOptions: FilterDefaultOptions[][];
     markUnindexed: boolean;
     dexieTable: Table | null;
-}
+};
 
 type ConfigInstance = InstanceType<typeof FiltersConfig>;
 
@@ -103,10 +106,10 @@ const FilterFieldsConfig = class {
         })) as Column[];
         const columns = !isEmptyObject(columnValues) ? columnValues : ([] as Column[]);
         const columnNames = columns.map((c) => c.name);
-        const filterValues = (await settings.get({
+        const filterValues = await settings.get({
             ...target,
             subject: 'filters',
-        })) as Filter[];
+        });
         const filters = (!isEmptyObject(filterValues) ? filterValues : []).filter((f) =>
             columnNames.includes(f.field),
         );
@@ -397,9 +400,9 @@ const FilterFieldsConfig = class {
             (column) => column.name === filter.field,
         );
         if (columnIndex !== -1) {
-            this[state].rememberedOptions[idx][columnIndex] = pickProperties(
+            this[state].rememberedOptions[idx][columnIndex] = pickByKeys(
                 filter,
-                Object.keys(defaultFilterOptions()),
+                defaultFilterOptions(),
             ) as FilterDefaultOptions;
         }
         this.rememberOptions();
@@ -490,7 +493,11 @@ const FilterFieldsConfig = class {
         }
     }
     static saveFilters(filters: Filter[], target: AppTarget) {
-        settings.save({ ...target, subject: 'filters', values: filters });
+        settings.save({
+            ...target,
+            subject: 'filters',
+            values: filters,
+        });
     }
     static async restoreFilters(target: AppTarget, columns: Column[], dexieTable: Table) {
         const filters: Filter[] = [];
@@ -501,11 +508,9 @@ const FilterFieldsConfig = class {
             );
             values.forEach((filter: Filter) => {
                 const column = columns.find((column) => column.name === filter.field);
-                // if (column) {
                 filter.indexed = column ? column.indexed : false;
                 filter.compoundHead = column ? column.compoundHead : false;
                 filters.push({ ...filter });
-                // }
             });
         }
         return filters.length > 0 ? filters : [initialFilter(columns, dexieTable)];

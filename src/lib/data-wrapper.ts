@@ -1,13 +1,13 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { replacer, reviver } from './json-wrapper.ts';
-import { getType } from './datatypes.ts';
-import type { PlainObject } from './types/common.ts';
+import { replacer, reviver } from '#lib/json-wrapper';
+import { getType } from '#lib/datatypes';
+import type { UnknownRecord } from '#types';
 
-export const encodeQueryResult = (data: PlainObject[]) => {
+export const encodeQueryResult = (data: UnknownRecord[]) => {
     let encoded = false;
     data.map((row) => {
         for (const [key, value] of Object.entries(row)) {
@@ -24,18 +24,50 @@ export const encodeQueryResult = (data: PlainObject[]) => {
     return { data, encoded };
 };
 
-export const decodeQueryResult = (data: PlainObject[]) => {
+export const encodeValue = (value: unknown) => {
+    const type = getType(value);
+    return ['bigint64array', 'biguint64array'].includes(type)
+        ? {
+              idxdbmType: type,
+              value: JSON.stringify(value, replacer),
+          }
+        : value;
+};
+
+type EncodedValue = {
+    idxdbmType: 'bigint64array' | 'biguint64array';
+    value: string;
+};
+
+export const decodeQueryResult = (data: UnknownRecord[]) => {
     data = structuredClone(data);
     data.forEach((row, index) => {
         for (const [key, value] of Object.entries(row)) {
-            if (typeof value === 'object' && value !== null) {
-                if (['bigint64array', 'biguint64array'].includes(value.idxdbmType)) {
-                    row[key] = JSON.parse(value.value, reviver);
-                }
+            if (isEncoded(value)) {
+                row[key] = JSON.parse(value!.value, reviver);
             }
         }
         data[index] = row;
     });
-
     return data;
+};
+
+export const decodeValue = (value: unknown) => {
+    let result = structuredClone(value);
+    if (isEncoded(result)) {
+        result = JSON.parse(result.value, reviver);
+    }
+    return result;
+};
+
+const isEncoded = (value: unknown): value is EncodedValue => {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'idxdbmType' in value &&
+        typeof value.idxdbmType === 'string' &&
+        ['bigint64array', 'biguint64array'].includes(value.idxdbmType) &&
+        'value' in value &&
+        typeof value.value === 'string'
+    );
 };

@@ -1,27 +1,30 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, TemplateResult } from 'lit-html';
-import messageStack from './messagestack.ts';
-import tooltip from './tooltip.ts';
-import displayConfigControl from './config/config-control.ts';
-import type { ConfigRealm } from './config/types.ts';
-import appStore from '../lib/app-store.ts';
-import { type AppTarget } from '../lib/app-target.ts';
-import { isPrimKeyUnnamed } from '../lib/dexie-utils.ts';
-import { labeledSelectbox } from '../lib/selectbox.ts';
-import settings from '../lib/settings.ts';
-import svgIcon from '../lib/svgicon.ts';
-import { selfMap } from '../lib/utils.ts';
-import type { ExportFormat, KTable, PlainObject } from '../lib/types/common.ts';
+
+import messageStack from '#components/messagestack';
+import tooltip from '#components/tooltip';
+import displayConfigControl from '#components/config/config-control';
+import appStore from '#lib/app-store';
+import { isPrimKeyUnnamed } from '#lib/dexie-utils';
+import messenger from '#lib/messenger';
+import { labeledSelectbox } from '#lib/selectbox';
+import settings from '#lib/settings';
+import svgIcon from '#lib/svgicon';
+import { capitalize, selfMap, sleep } from '#lib/utils';
+import type { AppTarget, ExportFormat, KTable, PlainObject } from '#types';
 
 /*
  * helper for Importer and Exporter with jointly used methods
  */
 const ImporterExporter = class {
-    constructor() {}
+    usage;
+    constructor(usage: 'import' | 'export') {
+        this.usage = usage;
+    }
     formatSelect({
         id,
         formats,
@@ -46,7 +49,7 @@ const ImporterExporter = class {
                   ${formats[0]}
               `;
     }
-    infoTooltipIcon(boundSettingsTooltipView: any): TemplateResult {
+    infoTooltipIcon(boundSettingsTooltipView: () => TemplateResult): TemplateResult {
         return html`
             <span
                 class="right"
@@ -63,7 +66,7 @@ const ImporterExporter = class {
             anchor: target.closest('span'),
         });
     }
-    changeSettingsIcon(realm: ConfigRealm, target: AppTarget): TemplateResult {
+    changeSettingsIcon(realm: 'import' | 'export', target: AppTarget): TemplateResult {
         const changeSettings = () => {
             tooltip.close();
             displayConfigControl({
@@ -121,12 +124,37 @@ const ImporterExporter = class {
         const { defaults, target } = state;
         settings.saveSettings(state, defaults, target, subject);
     }
+    private exportImportPromise: Promise<void> | undefined;
+    async ensureInjectedExportImport() {
+        if (this.checkInjectedLoaded) {
+            return;
+        }
+        return (this.exportImportPromise ??= this.doEnsureInjectedExportImport());
+    }
+    private async doEnsureInjectedExportImport() {
+        try {
+            messenger.post({ type: 'injectExportImport' });
+            for (let cnt = 1; cnt < 50; cnt++) {
+                if (this.checkInjectedLoaded) {
+                    return;
+                }
+                await sleep(50);
+            }
+            throw Error('Loading the import/export module for Firefox failed!');
+        } finally {
+            this.exportImportPromise = undefined;
+        }
+    }
+    get checkInjectedLoaded() {
+        return document.documentElement.hasAttribute(
+            'data-kahuna-export-import-available',
+        );
+    }
     handleError(error: Error) {
         if (appStore.loading) {
             appStore.rerender({ loading: false });
         }
-        const job = this.constructor.name === 'Importer' ? 'Import' : 'Export';
-        messageStack.displayError(`${job} error: ${error.message}`);
+        messageStack.displayError(`${capitalize(this.usage)} error: ${error.message}`);
     }
 };
 

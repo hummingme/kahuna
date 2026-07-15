@@ -1,34 +1,33 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
+import { html, render } from 'lit-html';
 import { styleMap } from 'lit/directives/style-map.js';
 import { ref, createRef } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { spread } from '@open-wc/lit-helpers';
 
-import ChevronNavigation from './chevron-navigation.ts';
-import messageStack from './messagestack.ts';
-import BehaviorConfig from './config/behavior-config.ts';
+import ChevronNavigation from '#components/chevron-navigation';
+import messageStack from '#components/messagestack';
+import BehaviorConfig from '#components/config/behavior-config';
 import JsCodeareaConfig, {
     type JsCodeareaConfigValues,
-} from './config/jscodearea-config.ts';
-import appStore from '../lib/app-store.ts';
-import appWorker from '../lib/app-worker.ts';
-import { button, symbolButton } from '../lib/button.ts';
-import env from '../lib/environment.ts';
-import executeCode from '../lib/execute-code.ts';
-import messenger from '../lib/messenger.ts';
-import settings from '../lib/settings.ts';
-import svgIcon from '../lib/svgicon.ts';
-import { type AppTarget } from '../lib/app-target.ts';
-import { Message } from '../lib/types/messages.ts';
-import { type SettingSubject } from '../lib/types/settings.ts';
-import { ExecutionMethod, PlainObject } from '../lib/types/common.ts';
+} from '#components/config/jscodearea-config';
+import appStore from '#lib/app-store';
+import appWorker from '#lib/app-worker';
+import { button, symbolButton } from '#lib/button';
+import { decodeValue } from '#lib/data-wrapper';
+import env from '#lib/environment';
+import { executeCode } from '#lib/execute-code';
+import messenger from '#lib/messenger';
+import settings from '#lib/settings';
+import svgIcon from '#lib/svgicon';
+import type { AppTarget, ExecutionMethod, Message, UnknownRecord } from '#types';
 
 interface JsCodeareaState extends JsCodeareaConfigValues {
+    user: 'datatable' | 'valueEditorField';
     enabled: boolean;
     code: string;
     placeholder: boolean;
@@ -36,39 +35,60 @@ interface JsCodeareaState extends JsCodeareaConfigValues {
     saved: boolean;
 }
 interface JsCodeareaOptions {
+    user: 'datatable' | 'valueEditorField';
     enabled: boolean;
     target: AppTarget;
+    detail?: string;
     selectorFields: string[];
-    executed: () => Promise<void>;
-    requiredVariables: () => Promise<RequiredVariables>;
+    executed: (res: unknown) => void;
+    requireVariables: () => RequiredVariables;
 }
-interface RequiredVariables {
+export interface RequiredVariables {
     selected: Set<string | number>;
-    row?: PlainObject;
+    row: UnknownRecord | undefined;
+    value?: unknown;
 }
+
 const state = Symbol('JsCodearea state');
 
-const JsCodearea = class {
+export const JsCodearea = class {
     [state]: JsCodeareaState = this.initialState;
-    #options?: Omit<JsCodeareaOptions, 'enabled'>;
+    #options?: Omit<JsCodeareaOptions, 'enabled' | 'user'>;
+    #node?: HTMLElement;
     #textarea?: HTMLTextAreaElement;
     #saveIcon = createRef();
     #updateIcon = createRef();
     #forgetIcon?: HTMLElement; // set by ref callback this.forgetRendered()
+    #boundCodeExecuted;
+    #boundCodeErrorMessage;
+    #boundRefresh;
     constructor() {
-        messenger.register('codeExecuted', this.executed.bind(this));
-        messenger.register('codeError', this.codeErrorMessage.bind(this));
-        messenger.register('idxdbmCodeExecuted', this.executed.bind(this));
-        messenger.register('refreshCodearea', this.refresh.bind(this));
+        this.#boundCodeExecuted = this.codeExecuted.bind(this);
+        this.#boundCodeErrorMessage = this.codeErrorMessage.bind(this);
+        this.#boundRefresh = this.refresh.bind(this);
+        this.manageMessageHandler('register');
+    }
+    shutdown() {
+        this.manageMessageHandler('unregister');
+    }
+    manageMessageHandler(action: 'register' | 'unregister') {
+        messenger[action]('codeExecuted', this.#boundCodeExecuted);
+        messenger[action]('idxdbmCodeExecuted', this.#boundCodeExecuted);
+        messenger[action]('codeError', this.#boundCodeErrorMessage);
+        messenger[action]('refreshCodearea', this.#boundRefresh);
     }
     async init(options: JsCodeareaOptions) {
-        let enabled;
-        ({ enabled = true, ...this.#options } = options);
-        const { values } = await JsCodeareaConfig.getSettings(options.target);
+        let enabled, user;
+        ({ enabled, user, ...this.#options } = options);
+        const { values } = await JsCodeareaConfig.getSettings(
+            options.target,
+            options.detail,
+        );
         const code = values.savedIndex > -1 ? values.savedCode[values.savedIndex] : '';
         this[state] = {
             ...values,
             ...(await this.behaviorSettings()),
+            user,
             enabled,
             code,
             saved: code.length > 0,
@@ -76,8 +96,10 @@ const JsCodearea = class {
     }
     get initialState(): JsCodeareaState {
         const executionMethod: ExecutionMethod = 'webworker';
+        const user: 'datatable' | 'valueEditorField' = 'datatable';
         return Object.assign(
             {
+                user,
                 enabled: true,
                 code: '',
                 placeholder: true,
@@ -92,15 +114,18 @@ const JsCodearea = class {
     }
     get textarea() {
         if (this.#textarea === undefined) {
-            throw Error('Unexpected error: textarea not yet initialized');
+            throw Error('Unexpected error1: textarea not yet initialized');
         }
         return this.#textarea;
     }
     get options() {
         if (this.#options === undefined) {
-            throw Error('Unexpected error: textarea not yet initialized');
+            throw Error('Unexpected error2: JsCodearea not yet initialized');
         }
         return this.#options;
+    }
+    updateOptions(update: Partial<JsCodeareaOptions>) {
+        this.#options = { ...this.options, ...update };
     }
     disable() {
         this[state].enabled = false;
@@ -109,9 +134,10 @@ const JsCodearea = class {
         this[state] = { ...this[state], ...diff };
         settings.saveSettings(
             this[state],
-            JsCodeareaConfig.getDefaults(),
+            JsCodeareaConfig.getDefaults(this.#options?.detail),
             this.options.target,
-            JsCodeareaConfig.subject as SettingSubject,
+            JsCodeareaConfig.subject,
+            this.#options?.detail,
         );
         this.refreshIcons();
     }
@@ -130,6 +156,22 @@ const JsCodearea = class {
             placeholder: codeareaPlaceholder,
         };
     }
+    node() {
+        return html`
+            <div id="js-codearea-wrapper" ${ref(this.nodeReady.bind(this))}></div>
+        `;
+    }
+    nodeReady(node?: Element) {
+        if (node instanceof HTMLElement) {
+            this.#node = node;
+            this.render();
+        }
+    }
+    render() {
+        if (this.#node) {
+            render(this.view(), this.#node);
+        }
+    }
     view = () => {
         const { enabled, width, height, code } = this[state];
         if (enabled === false) {
@@ -137,7 +179,7 @@ const JsCodearea = class {
         }
         const executeButton = button({
             content: svgIcon('tabler-check'),
-            '@click': this.execute.bind(this),
+            '@click': this.execute,
             title: 'execute javascript code',
         });
         const clearButton = button({
@@ -158,17 +200,16 @@ const JsCodearea = class {
                 '@blur': this.setPlaceholder.bind(this),
             });
         }
+        const styles = width && height ? styleMap({ width, height }) : null;
         return html`
-            <div style="display: inline-block;">
-                <textarea
-                    ${ref(this.textareaRendered)}
-                    style=${styleMap({ width, height })}
-                    ${spread(attributes)}
-                ></textarea>
-                <div id="codearea-nav">
-                    ${this.savedCodeControl()}
-                    <div class="button-wrapper">${executeButton} ${clearButton}</div>
-                </div>
+            <textarea
+                ${ref(this.textareaRendered)}
+                style=${styles}
+                ${spread(attributes)}
+            ></textarea>
+            <div id="codearea-nav">
+                ${this.savedCodeControl()}
+                <div class="button-wrapper">${executeButton} ${clearButton}</div>
             </div>
         `;
     };
@@ -181,14 +222,21 @@ const JsCodearea = class {
         target.placeholder = this.placeholder();
     }
     placeholder() {
+        if (this[state].code || this[state].placeholder === false) {
+            return '';
+        }
         const { database, table } = appStore.target();
-        return this[state].placeholder && this[state].code === '' && table !== '*'
+        return this[state].user === 'datatable'
             ? `/* available global variables:
  *   db (Dexie database connection for ${database})
  *   table (Dexie table instance of ${table})
  *   selection (Dexie collection instance of selected rows, if any)
+ *   Dexie (Dexie instance)
  */`
-            : '';
+            : `/* available global variables:
+ * value, row, selection, table, db, Dexie;
+ * return the new field value
+ */`;
     }
     savedCodeControl = () => {
         const { savedIndex, savedCode } = this[state];
@@ -250,7 +298,7 @@ const JsCodearea = class {
     refreshIcons = () => {
         const { saved, savedIndex, savedCode, code } = this[state];
         const isEmpty = code.trim().length === 0;
-        let hide = [];
+        let hide: ('save' | 'update' | 'forget')[];
         if (isEmpty) {
             hide = saved ? ['save', 'update'] : ['save', 'update', 'forget'];
         } else if (saved === true) {
@@ -261,12 +309,16 @@ const JsCodearea = class {
         this.hideIcons(hide);
     };
     hideIcons = (hide: string[]) => {
-        const saveIcon = this.#saveIcon.value as HTMLElement;
-        saveIcon.style.display = hide.includes('save') ? 'none' : 'block';
-        const updateIcon = this.#updateIcon.value as HTMLElement;
-        updateIcon.style.display = hide.includes('update') ? 'none' : 'block';
-        if (this.#forgetIcon) {
-            this.#forgetIcon.style.display = hide.includes('forget') ? 'none' : 'block';
+        const saveIcon = this.#saveIcon.value;
+        const updateIcon = this.#updateIcon.value;
+        if (saveIcon instanceof HTMLElement && updateIcon instanceof HTMLElement) {
+            saveIcon.style.display = hide.includes('save') ? 'none' : 'block';
+            updateIcon.style.display = hide.includes('update') ? 'none' : 'block';
+            if (this.#forgetIcon) {
+                this.#forgetIcon.style.display = hide.includes('forget')
+                    ? 'none'
+                    : 'block';
+            }
         }
     };
     chevronPosInfo = ({ offset, total }: { offset: number; total: number }) => {
@@ -292,13 +344,13 @@ const JsCodearea = class {
                 code,
             });
         }
-        appStore.rerender();
+        this.render();
     };
     pointerUp = (event: Event) => {
         const target = event.target as HTMLElement;
         const { width, height } = target.style;
-        const { width: w, height: h } = this[state];
-        if (width !== w || height !== h) {
+        const { width: oldWidth, height: oldHeight } = this[state];
+        if (width !== oldWidth || height !== oldHeight) {
             this.update({ width, height });
         }
     };
@@ -321,7 +373,7 @@ const JsCodearea = class {
                 code,
             });
         }
-        appStore.rerender();
+        this.render();
     };
     updateClicked = () => {
         const code = this.textarea.value;
@@ -345,57 +397,60 @@ const JsCodearea = class {
             savedCode,
             code: '',
         });
-        appStore.rerender();
+        this.render();
     };
 
     /**
      * onClick of execute button
      */
     execute = async () => {
-        const options = this.options;
+        const { target, selectorFields, requireVariables } = this.options;
         const code = this.textarea.value;
         this.update({ code });
         this.startLoading();
-        const { selected, row } = await options.requiredVariables();
+        const { selected, row, value } = requireVariables();
         const load = {
             code,
+            target,
+            selectorFields,
             selected,
-            selectorFields: options.selectorFields,
             row,
-            ...options.target,
+            value,
+            client: this[state].user,
+            encodeResult: env.bigIntArrayFlaw === true,
         };
-        const executionMethod = this.executionMethod();
+        const executionMethod = env.executionMethod(this[state].executionMethod);
         if (executionMethod === 'webworker') {
             messenger.post({ type: 'executeCode', load });
         } else if (executionMethod === 'unsafeEval') {
             try {
-                await executeCode(load);
+                const result = await executeCode(load);
+                this.executed(result);
             } catch (error) {
                 this.codeError(error as Error);
             }
-            this.executed();
         } else if (executionMethod === 'userscript') {
             messenger.post({ type: 'idxdbmExecuteCode', load });
         } else {
             this.codeError(Error('Sorry, no way to execute code.'));
         }
     };
-    executionMethod() {
-        const desiredMethod = this[state].executionMethod;
-        const availableMethods = env.codeExecutionMethods;
-        if (availableMethods.includes(desiredMethod)) {
-            return desiredMethod;
-        }
-        return availableMethods.shift();
-    }
     async abort() {
         if (env.workersBlocked === false) {
             await appWorker.restart();
         }
         this.stopLoading();
     }
-    async executed() {
-        await this.options.executed();
+    codeExecuted(message: Message) {
+        if (
+            (message.type === 'codeExecuted' || message.type === 'idxdbmCodeExecuted') &&
+            message.client === this[state].user
+        ) {
+            this.executed(decodeValue(message.result));
+        }
+    }
+    async executed(result: unknown) {
+        this.options.executed(result);
         this.stopLoading();
     }
     codeErrorMessage(msg: Message) {
@@ -422,13 +477,14 @@ const JsCodearea = class {
         });
     }
     stopLoading() {
+        const loadTables = this[state].user === 'datatable';
         appStore.update(
             {
                 loading: false,
                 loadingMsg: '',
                 loadingStop: null,
             },
-            { loadTables: true },
+            { loadTables },
         );
     }
 };

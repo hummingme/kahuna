@@ -1,5 +1,26 @@
+# v1.6.0
+- released on 2026/07/14
+- added a Value Editor component. All 44 data types supported by IndexedDB can now be edited in forms, manipulated via JavaScript, and/or replaced by uploading data.
+- in Firefox, import and export in Dexie format are now executed from a script injected into the website's MAIN context to avoid problems with dexie-export-import in the RESTRICTED context.
+- escape invisible and non-printable characters in displayed string data.
+- added image previews for the ImageData and ImageBitmap data types.
+- all modal windows (Configuration, Schema Editor, Value Editor, About) are now draggable by their top edge.
+- bugfix: applying the search filter to empty values (undefined, null, ...) no longer throws an error.
+- bugfix: fixed data export in Dexie format from the Selection Tools when the table has an unnamed primary key.
+- bugfix: empty array slots are no longer treated as undefined values when editing data.
+- the minimum supported Firefox version is now 128.
+- the setting for the table to load at startup is now saved on a per-host basis.
+- in the Columns configuration, clicking 'reset to defaults' now clears the display format and marks all columns as visible.
+- in the application configuration, a backup of all saved Kahuna settings can now be downloaded as a file in Dexie format. Backups can also be imported to restore the settings.
+- the datatable scroll position is now restored after reloading.
+- bugfix: regular expression search filters work again when the entered regular expression contains special characters.
+- spell checking is now disabled for all text input fields.
+- JavaScript code entered in the JavaScript Textarea now has access to a Dexie instance.
+- bugfix: notifications that can be disabled via a checkbox are now hidden only for the current origin when the checkbox label indicates this.
+- added a setting to the behavior configuration to control whether data queries are executed by web workers.
+
 # v1.5.2
-- released on 2026/01/18
+- released on 2026/01/17
 - Case-insensitive 'equals' and 'startsWith' filters are accelerated by using equalsIgnoreCase() and startsWithIgnoreCase()
 - Bugfix: the view of empty BigInt64Arrays values has been corrected
 - Bugfix: the view of RegExp values has been corrected
@@ -19,7 +40,6 @@
 - Bugfix: follow the `rows per page` setting on the initial view of an unfiltered and unsorted table
 - Bugfix: never add an additional column `*key*` when copying tables and databases
 - Bugfix: correct preparation of the `collection` variable for the javascript code to be executed from the textarea
-- Bugfix: with Chromium, manifest version 3, reconnect message port if the background worker is sleeping
 
 # v1.5.0
 - released on 2025/07/31

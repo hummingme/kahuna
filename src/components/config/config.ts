@@ -1,31 +1,34 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, TemplateResult } from 'lit-html';
+
 import type {
     AllOptions,
     ControlInstance,
     Option,
-    OptionKey,
     OptionName,
-    RealmOptions,
     SelectOption,
     InputOption,
-} from './types.ts';
-import { isGlobal, isDatabase, AppTarget } from '../../lib/app-target.ts';
-import checkbox from '../../lib/checkbox.ts';
-import settings from '../../lib/settings.ts';
-import { pickProperties } from '../../lib/utils.ts';
-import { selectbox } from '../../lib/selectbox.ts';
-import svgIcon from '../../lib/svgicon.ts';
-import textinput from '../../lib/textinput.ts';
-import { PlainObject } from '../../lib/types/common.ts';
-import { SettingSubject } from '../../lib/types/settings.ts';
+} from '#components/config/types';
+import { isGlobal, isDatabase } from '#lib/app-target';
+import checkbox from '#lib/checkbox';
+import settings from '#lib/settings';
+import { pickProperties } from '#lib/utils';
+import { selectbox } from '#lib/selectbox';
+import svgIcon from '#lib/svgicon';
+import textinput from '#lib/textinput';
+import {
+    AppTarget,
+    SerializedSettingValues,
+    SettingSubject,
+    SettingValuesMap,
+} from '#types';
 
 type ConfigState = {
-    defaults: RealmOptions;
+    defaults: Partial<AllOptions>;
     subject: SettingSubject;
 } & Partial<AllOptions>;
 
@@ -59,6 +62,10 @@ const Config = class {
     get target() {
         return this.#control.target;
     }
+    get rememberedSettings() {
+        return this.#control.rememberedSettings;
+    }
+
     render() {
         this.#control.render();
     }
@@ -77,16 +84,16 @@ const Config = class {
     isChanged() {
         const remembered = this.#control.rememberedSettings;
         for (const key in remembered) {
-            if (
-                !settings.isEqualSetting(
-                    remembered[key as OptionKey],
-                    this.state[key as OptionKey],
-                )
-            ) {
-                return true;
-            }
+            if (this.isOptionChanged(key as OptionName)) return true;
         }
         return false;
+    }
+    isOptionChanged(option: OptionName) {
+        const remembered = this.#control.rememberedSettings;
+        return (
+            typeof remembered !== 'undefined' &&
+            !settings.isEqualSetting(remembered[option], this.state[option])
+        );
     }
     undoChanges() {
         this.state = { ...this.state, ...this.#control.rememberedSettings };
@@ -116,7 +123,7 @@ const Config = class {
                 ${checkbox({
                     name,
                     label: this.optionLabel(name, label),
-                    checked: this.state[name] as boolean,
+                    checked: !!this.state[name],
                     '@change': change ?? this.checkboxOptionChanged.bind(this, name),
                 })}
             </p>
@@ -157,7 +164,7 @@ const Config = class {
     }
     optionSelectView(args: SelectOption) {
         const { label, ...props } = args;
-        const selected = this.state[props.name] ? (this.state[props.name] as string) : '';
+        const selected = this.state[props.name] ? String(this.state[props.name]) : '';
         props['@change'] ??= this.inputOptionChanged.bind(this, props.name);
         const select = selectbox({ ...props, selected });
         return html`
@@ -165,21 +172,15 @@ const Config = class {
         `;
     }
     optionLabel(name: OptionName, label: string | TemplateResult) {
-        const remembered = this.#control.rememberedSettings as RealmOptions;
-        const modifiedIcon = settings.isEqualSetting(
-            this.state[name],
-            remembered[name as OptionKey],
-        )
+        const remembered = this.#control.rememberedSettings;
+        const defaults = this.state.defaults;
+        if (!remembered || name in defaults === false) return '';
+        const modifiedIcon = settings.isEqualSetting(this.state[name], remembered[name])
             ? ''
             : this.modifiedIcon();
-        const defaults = this.state.defaults;
-        const defaultIcon = settings.isEqualSetting(
-            this.state[name],
-            defaults[name as OptionKey],
-        )
+        const defaultIcon = settings.isEqualSetting(this.state[name], defaults[name])
             ? this.defaultIcon()
             : '';
-
         const decorateLabel = this['decorateLabel' as keyof this];
         if (typeof decorateLabel === 'function') {
             label = decorateLabel(name, label);
@@ -209,7 +210,8 @@ const Config = class {
         `;
     }
     checkboxOptionChanged(name: OptionName, event: Event) {
-        const target = event.target as HTMLInputElement;
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
         const options = this['checkboxOptions' as keyof this] as Option[];
         if (options.map((opt) => opt.name).includes(name)) {
             this.setStateValue(name, target.checked);
@@ -217,7 +219,12 @@ const Config = class {
         }
     }
     inputOptionChanged(name: OptionName, event: Event) {
-        const target = event.target as HTMLInputElement;
+        const target = event.target;
+        if (
+            !(target instanceof HTMLInputElement) &&
+            !(target instanceof HTMLSelectElement)
+        )
+            return;
         let value: string | number = target.value.trim();
         if (target.checkValidity() === true) {
             if (value.length > 0 && Number.isNaN(Number(value)) === false) {
@@ -233,18 +240,18 @@ const Config = class {
             } else if (target.max !== '' && validity.rangeOverflow) {
                 value = Number(target.max);
             } else {
-                value = this.state[name] as number;
+                value = Number(this.state[name]);
             }
             target.value = String(value);
         }
         this.setStateValue(name, value);
         this.saveSettings();
     }
-    static async getDefaults(
+    static async getDefaults<S extends SettingSubject>(
         target: AppTarget,
-        subject: SettingSubject,
-        preset: PlainObject,
-    ) {
+        subject: S,
+        preset: SettingValuesMap[S],
+    ): Promise<SettingValuesMap[S]> {
         if (isGlobal(target)) {
             return preset;
         }
@@ -257,18 +264,14 @@ const Config = class {
         return { ...preset, ...defaults };
     }
     saveSettings() {
-        const defaults = this.state.defaults as PlainObject;
-        const values = pickProperties(this.state, Object.keys(defaults));
-        const globalsDefaults = this['globalsDefaults' as keyof this];
-        if (globalsDefaults) {
-            const globals = pickProperties(this.state, Object.keys(globalsDefaults));
-            for (const key in globals) {
-                delete values[key];
-                if (settings.isEqualSetting(globals[key], defaults[key])) {
-                    delete globals[key];
-                }
-            }
-            settings.saveGlobals(globals);
+        const defaults = this.state.defaults as SerializedSettingValues;
+        const keys = Object.keys(defaults) as OptionName[];
+        const values = pickProperties(this.state, keys);
+        if (
+            'saveGlobalSettings' in this &&
+            typeof this.saveGlobalSettings === 'function'
+        ) {
+            this.saveGlobalSettings();
         }
         settings.saveSettings(values, defaults, this.target, this.state.subject);
         this.render();

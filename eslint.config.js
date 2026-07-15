@@ -3,9 +3,9 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettierFlat from 'eslint-config-prettier/flat';
 
-export default tseslint.config(
+export default [
     eslint.configs.recommended,
-    tseslint.configs.recommended,
+    ...tseslint.configs.recommended,
     {
         files: ['**/*.ts'],
         languageOptions: {
@@ -27,12 +27,12 @@ export default tseslint.config(
                     caughtErrorsIgnorePattern: '^_',
                     destructuredArrayIgnorePattern: '^_',
                     ignoreRestSiblings: true,
-                    reportUsedIgnorePattern: true,
                 },
             ],
             '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-inferrable-types': 'error',
             'no-console': 'warn',
         },
     },
     prettierFlat,
-);
+];

@@ -1,12 +1,13 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
-import type { ContentScriptType } from '../contentscript.ts';
-import { globalTarget } from './app-target.ts';
-import { postToBackground } from './post-background.ts';
-import { uniqueId } from './utils.ts';
-import { type Message, isGroupMessage } from './types/messages.ts';
+import type { ContentScriptType } from '../contentscript';
+import { globalTarget } from '#lib/app-target';
+import { isGroupMessage } from './message-utils';
+import { postToBackground } from '#lib/post-background';
+import { uniqueId } from '#lib/utils';
+import { Message } from '#types';
 
 const ContentscriptMessenger = class {
     #actor;
@@ -21,14 +22,8 @@ const ContentscriptMessenger = class {
             id: uniqueId(),
         });
     }
-    async handleInjectedMessage(msg: any) {
-        if (
-            this.#actor &&
-            typeof msg === 'object' &&
-            msg !== null &&
-            Object.hasOwn(msg, 'origin') &&
-            msg.origin === location.origin
-        ) {
+    async handleInjectedMessage(msg: MessageEvent) {
+        if (this.#actor && msg.origin === location.origin) {
             const message = msg.data;
             if (isGroupMessage('toContent', message)) {
                 if (message.type === 'changedDatabases') {

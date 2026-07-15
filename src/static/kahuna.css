@@ -1,8 +1,14 @@
+/**
+ * SPDX-License-Identifier: MPL-2.0
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
+ */
+
 :host {
     all: initial; /* https://web.dev/articles/shadowdom-v1#resetting_inheritable_styles */
     contain: strict; /* https://developer.mozilla.org/en-US/docs/Web/CSS/contain */
-    --nice-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-        Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    --nice-font-family:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu,
+        Cantarell, 'Helvetica Neue', sans-serif;
     --nice-font-size: 15px;
     --nice-border-radius: 5px;
 }
@@ -20,7 +26,7 @@
     --nice-color-attention: orange;
     --nice-color-info: #5ecfa6;
     --nice-color-focus: #a8d4ff;
-    --nice-color-hilight: #fbfbac6b;
+    --nice-color-hilight: #fbfbac;
     --nice-pale-blue: #d7e5f0;
     --nice-colored-number: #045704;
     --nice-colored-string: #8c1212;
@@ -39,7 +45,7 @@
     --nice-color-attention: orange;
     --nice-color-info: #5ecfa6;
     --nice-color-focus: #8617aa;
-    --nice-color-hilight: #5c889f6b;
+    --nice-color-hilight: #5c889f;
     --nice-pale-blue: #d7e5f0;
     --nice-colored-number: #7ec699;
     --nice-colored-string: #a9a2f9;
@@ -64,8 +70,15 @@
     input[type='number']:focus-visible,
     select:focus-visible,
     textarea:focus-visible {
-        outline: 0px;
+        outline: none;
         border-color: var(--nice-color-focus);
+    }
+    input[type='text']:invalid,
+    input[type='number']:invalid,
+    select:invalid,
+    textarea:invalid {
+        border: 1px solid var(--nice-color-error);
+        outline: none;
     }
     input::placeholder,
     textarea::placeholder {
@@ -74,8 +87,10 @@
     a[target='_blank']::after {
         filter: invert(1);
     }
-    table.datatable a:visited {
-        color: var(--nice-grey-500);
+    table.datatable {
+        a:visited {
+            color: var(--nice-grey-500);
+        }
     }
     div.about,
     div.update-info {
@@ -247,6 +262,40 @@ th div.th-container div.th-icon {
     flex-shrink: 0;
     margin-left: 2px;
 }
+table.datatable {
+    td.editable {
+        position: relative;
+    }
+    td.editable:not(:has(div.preview-wrapper)):hover::after,
+    td.editable div.preview-wrapper:hover::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        transform: translate(-1px, -8px);
+        width: 21px;
+        height: 17px;
+        pointer-events: auto;
+        cursor: pointer;
+        background-color: var(--nice-grey-700);
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4' /%3E%3Cpath d='M13.5 6.5l4 4' /%3E%3C/svg%3E")
+            no-repeat center;
+        mask-size: contain;
+    }
+    td.editable div.preview-wrapper:hover::after {
+        left: 100%;
+    }
+    td.editable.aright:hover {
+        padding-right: 17px;
+    }
+    td.editable.oright span {
+        display: inline-block;
+        vertical-align: middle;
+    }
+    td.editable.oright:hover span {
+        width: calc(100% - 11px);
+        overflow: hidden;
+    }
+}
 
 input {
     padding: 0 3px;
@@ -274,7 +323,8 @@ textarea::placeholder {
     opacity: 1;
     font-style: italic;
 }
-input:invalid {
+input:invalid,
+textarea:invalid {
     border: 1px solid var(--nice-color-error);
     outline: none;
 }
@@ -418,6 +468,9 @@ h1.precis {
     font-size: var(--nice-font-size);
     font-weight: 400;
     margin: 5px 5px 0;
+    em {
+        font-weight: 500;
+    }
 }
 div.dttable {
     margin: 15px 0;
@@ -432,12 +485,22 @@ div.dttable input {
 table.datatable {
     margin: 15px 0 5px;
     tbody {
+        .preview-wrapper {
+            position: relative;
+            margin: 0 auto;
+        }
         .preview-box {
             text-align: center;
-            margin-left: auto;
-            margin-right: auto;
+            background: repeating-linear-gradient(
+                135deg,
+                var(--nice-grey-100),
+                var(--nice-grey-100) 3px,
+                var(--nice-grey-200) 3px,
+                var(--nice-grey-200) 6px
+            );
         }
-        .preview-box img {
+        .preview-box img,
+        .preview-box canvas {
             max-width: 100%;
             max-height: 100%;
             vertical-align: middle;
@@ -565,22 +628,49 @@ div#config-layer {
     flex-direction: column;
     user-select: text;
 }
-div#config-stage {
-    overflow: auto;
-}
-div#config-stage p {
-    margin: 10px 5px;
-}
-div#config-stage form {
-    margin-top: 15px;
-}
-div#config-stage table {
-    margin: 0;
-}
-div#config-stage svg.inline {
-    margin-bottom: -4px;
+
+div.drag-handle {
+    width: 100%;
+    height: 15px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    cursor: grab;
 }
 
+div#config-stage {
+    overflow: auto;
+    p {
+        margin: 10px 5px;
+    }
+    form {
+        margin-top: 15px;
+    }
+    table {
+        margin: 0;
+    }
+    svg.inline {
+        margin-bottom: -4px;
+    }
+    svg.switch-target {
+        transform: translateY(3px);
+    }
+    p.settings-export-import {
+        margin-left: 31px;
+        button:first-child {
+            margin-right: 0.5em;
+        }
+    }
+    div.confirm {
+        margin-right: 10px;
+        margin-bottom: 15px;
+    }
+}
+
+div#tooltip {
+    display: block;
+    position: absolute;
+}
 div#tooltip ul {
     margin: 0;
     padding-left: 15px;
@@ -660,6 +750,9 @@ fieldset#columns-table {
     border-bottom: 0;
 }
 
+div#js-codearea-wrapper {
+    display: inline-block;
+}
 textarea#js-codearea {
     margin-left: 2px;
 }
@@ -965,4 +1058,115 @@ table.datatable tbody {
 
 select#copy-target-db {
     max-width: 10em;
+}
+
+input:disabled,
+textarea:disabled {
+    background-color: var(--nice-grey-200);
+    cursor: not-allowed;
+}
+
+textarea + label {
+    vertical-align: top;
+}
+
+div#value-editor {
+    form#value-form {
+        display: grid;
+        grid-template-columns: [labels] auto [controls] 1fr;
+        grid-auto-flow: row;
+        grid-gap: 0.5em;
+        overflow: auto;
+        padding: 5px;
+        margin-top: 5px;
+        > *:nth-child(3),
+        > *:nth-child(4) {
+            margin: 0.5em 0;
+        }
+        p {
+            margin: 0 0 0.25em 0;
+        }
+    }
+    form#value-form > label {
+        grid-column: labels;
+        grid-row: auto;
+    }
+    form#value-form > div.value-controls {
+        display: grid;
+        grid-template-columns: [value] auto;
+        grid-auto-flow: column;
+        grid-column: controls;
+        grid-row: auto;
+        .value {
+            grid-column: value;
+        }
+        span.buttons {
+            float: right;
+            button {
+                margin: 3px 0 0 5px;
+            }
+        }
+        button.upload {
+            margin-top: 5px;
+        }
+        p > button {
+            margin: 0;
+        }
+        table {
+            button {
+                margin: 0;
+            }
+            th {
+                font-weight: 400;
+            }
+            tr:last-child td,
+            td:last-child {
+                background-color: revert;
+            }
+            td.right {
+                float: none;
+                text-align: right;
+            }
+        }
+    }
+    label[for='field-upload-charset'] {
+        padding-left: 1.3em;
+    }
+    .codearea-wrapper {
+        display: flex;
+        align-items: flex-start;
+        margin-top: 0.5em;
+        #js-codearea {
+            height: 4lh;
+            width: 20em;
+            white-space: pre;
+        }
+    }
+    .textarea-wrapper,
+    .form-wrapper {
+        display: flex;
+        align-items: flex-start;
+    }
+    .form-wrapper > .value-icons {
+        margin-left: 0.3em;
+    }
+    form#value-form > select {
+        width: min-content;
+    }
+    .number-input {
+        width: 10em;
+    }
+    .string-textarea {
+        height: 1lh;
+        width: 25em;
+        white-space: pre;
+        overflow-wrap: normal;
+        overflow: auto;
+    }
+    .value-icons {
+        display: grid;
+        .value-icon {
+            margin: 3px 0 3px 2px;
+        }
+    }
 }

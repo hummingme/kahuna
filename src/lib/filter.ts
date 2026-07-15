@@ -1,37 +1,31 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import type { Table } from 'dexie';
-import type { Column } from './column.ts';
-import { isPrimKeyNamed, isPrimKeyCompound } from '../lib/dexie-utils.ts';
-import { getType, isEmptyObject } from './datatypes.ts';
-import { escapeRegExp } from './utils.ts';
-import { stringFormatter } from './value-formatter.ts';
 
-export interface Filter extends FilterDefaultOptions {
-    field: string;
-    search: string;
-    indexed: boolean;
-    compoundHead: boolean;
-    valid: boolean;
-}
-export interface FilterDefaultOptions {
-    method: FilterMethod;
-    caseSensitive: boolean;
-    includeBounds: boolean;
-    empty: FilterEmptyMethod[];
-}
-export type FilterEmptyMethod = 'undefined' | 'null' | 'array' | 'object' | 'string';
+import type { Column } from '#lib/column';
+import { isPrimKeyNamed, isPrimKeyCompound } from '#lib/dexie-utils';
+import { getType, isEmptyObject } from '#lib/datatypes';
+import { ValueFormatter } from '#lib/value-formatter';
+import {
+    caseSensitiveMethods,
+    compoundHeadIndexedMethods,
+    CompoundHeadIndexedMethod,
+    indexedMethods,
+    type Filter,
+    type FilterDefaultOptions,
+    type FilterEmptyMethod,
+    type FilterMethod,
+    type IndexedMethod,
+} from '#types/filter';
 
-export type FilterMethod = keyof ReturnType<typeof searchMethods>;
-
-export interface MethodProps {
+type FilterMethodProps = {
     short: string;
-    funcFilter: (a: any, b: string | number) => boolean;
+    funcFilter: (a: unknown, b: string | number) => boolean;
     funcIndexed?: string;
-}
+};
 
 export const defaultFilterOptions = (): FilterDefaultOptions => ({
     method: 'equal',
@@ -83,11 +77,13 @@ export const initialFilter = (columns: Column[], dexieTable: Table): Filter => {
     });
 };
 
+const stringFormatter = new ValueFormatter('string');
+
 export const searchMethods = () => ({
     equal: {
         short: '=',
         funcIndexed: 'equals',
-        funcFilter: (a: any, b: string | number) => a === b,
+        funcFilter: (a: unknown, b: string | number) => a === b,
     },
     below: {
         includeBounds: {
@@ -116,23 +112,23 @@ export const searchMethods = () => ({
     notequal: {
         short: '≠',
         funcIndexed: 'notEqual',
-        funcFilter: (a: any, b: string | number) => a !== b,
+        funcFilter: (a: unknown, b: string | number) => a !== b,
     },
     startswith: {
         short: '..%',
         funcIndexed: 'startsWith',
-        funcFilter: (a: any, b: string) =>
-            stringFormatter.render(a, getType(a), 'definite').startsWith(b),
+        funcFilter: (a: unknown, b: string) =>
+            stringFormatter.render(a, getType(a)).startsWith(b),
     },
     endswith: {
         short: '%..',
-        funcFilter: (a: any, b: string) =>
-            stringFormatter.render(a, getType(a), 'definite').endsWith(b),
+        funcFilter: (a: unknown, b: string) =>
+            stringFormatter.render(a, getType(a)).endsWith(b),
     },
     contains: {
         short: '%..%',
-        funcFilter: (a: any, b: string) => {
-            return stringFormatter.render(a, getType(a), 'definite').includes(b);
+        funcFilter: (a: unknown, b: string) => {
+            return stringFormatter.render(a, getType(a)).includes(b);
         },
     },
     empty: {
@@ -145,48 +141,17 @@ export const searchMethods = () => ({
     },
 });
 
-// keep the order, it is used to determine which filter to apply first in queryData()
-export const indexedMethods = [
-    'equal',
-    'startswith',
-    'below',
-    'above',
-    'notequal',
-] as const;
-export type IndexedMethod = (typeof indexedMethods)[number];
-
-export const compoundHeadIndexedMethods = ['equal', 'notequal', 'startswith'] as const;
-export type CompoundHeadIndexedMethod = (typeof compoundHeadIndexedMethods)[number];
-
-export const caseSensitiveMethods = [
-    'equal',
-    'notequal',
-    'startswith',
-    'endswith',
-    'contains',
-    'regexp',
-];
-
-export type IndexedWhereClauseMethods =
-    | 'equals'
-    | 'belowOrEqual'
-    | 'below'
-    | 'aboveOrEqual'
-    | 'above'
-    | 'notEqual'
-    | 'startsWith';
-
 const regexpFunc = (filter: Filter) => {
     const flags = filter.caseSensitive ? '' : 'i';
-    const rx = new RegExp(escapeRegExp(filter.search), flags);
-    return (a: any) => rx.test(stringFormatter.render(a, getType(a), 'definite'));
+    const rx = new RegExp(filter.search, flags);
+    return (a: unknown) => rx.test(stringFormatter.render(a, getType(a)));
 };
 
 const emptyFunc = (filter: Filter) => {
     const emptyCheck = emptyCheckFunc(filter.empty);
     // a: data value; b: filter value
-    return (a: any, b: any) => {
-        if (['yes', 'no'].includes(b)) {
+    return (a: unknown, b: string | number) => {
+        if (typeof b === 'string' && ['yes', 'no'].includes(b)) {
             return b === 'yes' ? emptyCheck(a) : !emptyCheck(a);
         } else {
             return true;
@@ -194,8 +159,8 @@ const emptyFunc = (filter: Filter) => {
     };
 };
 
-const emptyCheckFunc = (checks: FilterEmptyMethod[]): ((arg0: any) => boolean) => {
-    const conditions: ((arg0: any) => boolean)[] = [];
+const emptyCheckFunc = (checks: FilterEmptyMethod[]): ((arg0: unknown) => boolean) => {
+    const conditions: ((arg0: unknown) => boolean)[] = [];
     if (checks.includes('undefined')) {
         conditions.push((value) => value === undefined);
     }
@@ -211,7 +176,7 @@ const emptyCheckFunc = (checks: FilterEmptyMethod[]): ((arg0: any) => boolean) =
     if (checks.includes('object')) {
         conditions.push((value) => isEmptyObject(value));
     }
-    return (value: any) => {
+    return (value: unknown) => {
         for (const condition of conditions) {
             if (condition(value)) return true;
         }
@@ -252,15 +217,17 @@ export const getFuncIndexed = (filter: Filter) => {
  */
 export const methodProperties = ({ method, includeBounds, caseSensitive }: Filter) => {
     const methodProps = searchMethods()[method];
-    const props: MethodProps =
+
+    const props: FilterMethodProps =
         'includeBounds' in methodProps
             ? (methodProps as any)[includeBounds ? 'includeBounds' : 'excludeBounds']
             : methodProps;
+
     if (caseSensitive === false) {
         const func = props.funcFilter;
-        props.funcFilter = (...args: any[]) => {
+        props.funcFilter = (...args: unknown[]) => {
             const [a, b] = args.map((p) =>
-                stringFormatter.render(p, getType(p), 'definite').toLowerCase(),
+                stringFormatter.render(p, getType(p)).toLowerCase(),
             );
             return func(a, b);
         };
@@ -285,13 +252,12 @@ export const isFilterValid = (val: string, filter: Filter) => {
 
 export const isIndexedFilter = (filter: Filter) => {
     const { indexed, method, caseSensitive } = filter;
-    const isIndexed =
-        indexed &&
-        (isIndexedMethod(method) ||
-            ['equal', 'startswith'].includes(method) ||
-            !caseSensitiveMethods.includes(method) ||
-            caseSensitive === true);
-    return isIndexed || isCompoundHeadIndexed(filter);
+    if (indexed) {
+        if (method === 'notequal' && caseSensitive === true) return true;
+        if (isIndexedMethod(method)) return true;
+        if (isCompoundHeadIndexed(filter)) return true;
+    }
+    return false;
 };
 
 const isIndexedMethod = (method: FilterMethod): method is IndexedMethod => {
@@ -299,10 +265,11 @@ const isIndexedMethod = (method: FilterMethod): method is IndexedMethod => {
 };
 
 export const isCompoundHeadIndexed = (filter: Filter) => {
+    const { compoundHead, method, caseSensitive } = filter;
     return (
-        filter.compoundHead === true &&
-        isCompoundHeadIndexedMethod(filter.method) &&
-        (!caseSensitiveMethods.includes(filter.method) || filter.caseSensitive === true)
+        compoundHead === true &&
+        isCompoundHeadIndexedMethod(method) &&
+        (!caseSensitiveMethods.includes(method) || caseSensitive === true)
     );
 };
 

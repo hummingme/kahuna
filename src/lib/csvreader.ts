@@ -1,9 +1,11 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-type ValueType = ReturnType<InstanceType<typeof CsvReader>['typedValue']>;
+import { getType } from './datatypes';
+
+type CsvValue = ReturnType<InstanceType<typeof CsvReader>['typedValue']>;
 
 const CsvReader = class {
     #text = '';
@@ -15,19 +17,8 @@ const CsvReader = class {
         if (typeof file === 'string') {
             this.#text = file;
             return;
-        } else if (file instanceof Blob) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    if (typeof reader.result !== 'string') {
-                        throw Error('CsvReader: error reading from file');
-                    }
-                    this.#text = reader.result;
-                    resolve(true);
-                };
-                reader.onerror = reject;
-                reader.readAsText(file);
-            });
+        } else if (getType(file) === 'blob' || getType(file) === 'file') {
+            this.#text = await file.text();
         } else {
             throw Error('CsvReader: init() called with neither blob nor string');
         }
@@ -37,7 +28,7 @@ const CsvReader = class {
         const lines = this.parseLines(this.#text, 0);
         const lineResult = lines.next().value;
         if (lineResult !== undefined) {
-            const { row, idx }: { row: ValueType[]; idx: number } = lineResult;
+            const { row, idx }: { row: CsvValue[]; idx: number } = lineResult;
             this.#idxData = idx;
             return row.map((val) => `${val}`);
         } else {
@@ -68,7 +59,7 @@ const CsvReader = class {
     }
 
     *parseValues(text: string, idx: number) {
-        let value: ValueType = '';
+        let value: CsvValue;
         let lineend = false;
         while (!lineend && idx < text.length) {
             if (text[idx] === '"') {

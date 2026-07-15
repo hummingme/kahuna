@@ -1,12 +1,13 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
 import { ref, type RefOrCallback } from 'lit/directives/ref.js';
 import { spread } from '@open-wc/lit-helpers';
-import svgIcon from './svgicon.ts';
+
+import svgIcon from '#lib/svgicon';
 
 interface ButtonProps {
     content: TemplateResult | string;
@@ -16,9 +17,10 @@ interface ButtonProps {
 }
 
 export const button = (props: ButtonProps) => {
-    const { content, tabIndex, refVar, ...attributes } = props;
+    const { content, type, tabIndex, refVar, ...attributes } = props;
     return html`
         <button
+            type=${type || 'button'}
             ${refVar ? ref(refVar) : ''}
             tabindex=${tabIndex || '0'}
             ${spread(attributes)}

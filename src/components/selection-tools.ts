@@ -1,27 +1,28 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 import type { Table } from 'dexie';
 import { html, type TemplateResult } from 'lit-html';
-import configLayer from './configlayer.ts';
-import exporter from './exporter.ts';
-import datatable, { DatatableState } from './datatable.ts';
-import appStore from '../lib/app-store.ts';
-import { symbolButton } from '../lib/button.ts';
-import checkbox from '../lib/checkbox.ts';
+
+import configLayer from '#components/configlayer';
+import exporter from '#components/exporter';
+import datatable, { type DatatableState } from '#components/datatable';
+import appStore from '#lib/app-store';
+import { symbolButton } from '#lib/button';
+import checkbox from '#lib/checkbox';
 import {
-    isPrimKeyUnnamed,
     collectionToArray,
+    dexieExportFilter,
     getCollection,
-} from '../lib/dexie-utils.ts';
-import type { Filter } from '../lib/filter.ts';
-import { applyFilters } from '../lib/querydata.ts';
-import svgIcon from '../lib/svgicon.ts';
-import { rowSelector } from '../lib/row-selection.ts';
-import { scrubblerDelete, scrubblerTopic } from '../lib/scrubbler.ts';
-import { addNestedValues, removeNestedValues, resolvePath } from '../lib/utils.ts';
-import type { PlainObject } from '../lib/types/common.ts';
+    isPrimKeyUnnamed,
+} from '#lib/dexie-utils';
+import { applyFilters } from '#lib/querydata';
+import svgIcon from '#lib/svgicon';
+import { rowSelector } from '#lib/row-selection';
+import { scrubblerDelete, scrubblerTopic } from '#lib/scrubbler';
+import { resolvePath } from '#lib/utils';
+import type { Filter, UnknownRecord } from '#types';
 
 const summon = (anchorId: string) => {
     const { target, dexieTable, selectorFields, selected } = datatable.state;
@@ -29,11 +30,7 @@ const summon = (anchorId: string) => {
     exporter.init({
         usage: 'selection',
         target,
-        dexieExportFilter: dexieExportFilter(
-            dexieTable as Table,
-            selectorFields,
-            selected,
-        ),
+        dexieExportFilter: dexieExportFilter(dexieTable, selectorFields, selected),
     });
     configLayer.show({
         view,
@@ -43,33 +40,6 @@ const summon = (anchorId: string) => {
             scrubblerDelete: scrubblerDelete.bind(dexieTable.name),
         },
     });
-};
-
-const dexieExportFilter = (
-    dexieTable: Table,
-    selectorFields: string[],
-    selected: Set<string | number>,
-) => {
-    const pkUnnamed = isPrimKeyUnnamed(dexieTable.schema.primKey);
-    const paths = selectorFields.filter((sf) => sf.includes('.'));
-    if (pkUnnamed) {
-        return (dtable: string, _values: any, key: any) => {
-            return dtable === dexieTable.name && selected.has(`${key}`);
-        };
-    } else if (paths.length === 0) {
-        return (dtable: string, values: any, _key: any) => {
-            const selector = rowSelector(selectorFields, values);
-            return dtable === dexieTable.name && selected.has(selector);
-        };
-    } else {
-        // paths.length > 0
-        return (dtable: string, values: any, _key: any) => {
-            values = addNestedValues(values, paths);
-            const selector = rowSelector(selectorFields, values);
-            values = removeNestedValues(values, paths);
-            return dtable === dexieTable.name && selected.has(selector);
-        };
-    }
 };
 
 const invertSelection = async () => {
@@ -85,8 +55,9 @@ const clearSelection = () => {
 
 const deleteSelection = async () => {
     const { dexieTable, selectorFields, selected, total } = datatable.state;
+    if (!dexieTable) return;
     const collection = getCollection({
-        dexieTable: dexieTable as Table,
+        dexieTable: dexieTable,
         selectorFields,
         selected,
     });
@@ -150,7 +121,7 @@ const controls = ({
     selectorFields,
     total,
 }: {
-    data: PlainObject[];
+    data: UnknownRecord[];
     selected: Set<string | number>;
     selectorFields: string[];
     total: number;
@@ -197,12 +168,11 @@ const controls = ({
 /*
  * change event handler of 'select all' checkbox
  */
-const allSelectedChanged = async (event: Event) => {
-    const target = event.target as HTMLInputElement;
+async function allSelectedChanged(this: HTMLInputElement) {
     return datatable.doLoading(async () => {
         const tstate: any = datatable.state;
         const selected: Set<string | number> = new Set();
-        if (target.checked) {
+        if (this.checked) {
             const data = await getSelectableData(tstate);
             data.forEach((row) => {
                 const selector = rowSelector(tstate.selectorFields, row);
@@ -211,15 +181,16 @@ const allSelectedChanged = async (event: Event) => {
         }
         datatable.update({ selected });
     });
-};
+}
 
 /*
  * change event handler of 'select page' checkbox
  */
 const pageSelectedChanged = (event: Event) => {
-    const target = event.target as HTMLInputElement;
+    const target = event.target;
+    if (target instanceof HTMLInputElement === false) return;
     const selectPage = target.checked;
-    const { selected, selectorFields, data } = datatable.state as any;
+    const { selected, selectorFields, data } = datatable.state;
     if (selectorFields.length > 0) {
         for (let idx = 0; idx < data.length; idx++) {
             const selector = rowSelector(selectorFields, data[idx]);
@@ -239,10 +210,11 @@ const pageSelectedChanged = (event: Event) => {
  */
 const invert = async (tstate: DatatableState) => {
     const { dexieTable, filters, selectorFields, selected } = tstate;
+    if (!dexieTable) return;
     return datatable.doLoading(async () => {
         const inverted: Set<string | number> = new Set();
         const data = await getSelectableData({
-            dexieTable: dexieTable as Table,
+            dexieTable: dexieTable,
             filters,
             selectorFields,
         });

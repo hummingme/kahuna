@@ -1,32 +1,40 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 import type { Table } from 'dexie';
 import { html } from 'lit-html';
-import Config from './config.ts';
-import type { ControlInstance, ColumnsOptions } from './types.ts';
-import datatable from '../datatable.ts';
-import { type AppTarget } from '../../lib/app-target.ts';
-import checkbox from '../../lib/checkbox.ts';
-import { buildColumn, type Column } from '../../lib/column.ts';
-import { isPrimKeyCompound, isPrimKeyUnnamed } from '../../lib/dexie-utils.ts';
-import { selectbox } from '../../lib/selectbox.ts';
-import settings from '../../lib/settings.ts';
-import { pickProperties } from '../../lib/utils.ts';
-import type { Direction } from '../../lib/types/common.ts';
-import type { SettingSubject } from '../../lib/types/settings.ts';
+
+import Config from '#components/config/config';
+import {
+    columnsDefaultOptions,
+    columnsDefaultOrder,
+} from '#components/config/columns-default';
+import type { ControlInstance, ColumnsOptions } from '#components/config/types';
+import datatable from '#components/datatable';
+import checkbox from '#lib/checkbox';
+import {
+    buildColumn,
+    type Column,
+    columnFormatOptions,
+    isColumnFormat,
+} from '#lib/column';
+import { isPrimKeyCompound, isPrimKeyUnnamed } from '#lib/dexie-utils';
+import { selectbox } from '#lib/selectbox';
+import settings from '#lib/settings';
+import { pickProperties, rowIndex } from '#lib/utils';
+import type { AppTarget, Direction, SettingSubject } from '#types';
 
 type ColumnsConfigState = {
     defaults: ColumnsOptions;
     subject: SettingSubject;
 } & ColumnsOptions;
 
-const ColumnsConfig = class extends Config {
+export default class ColumnsConfig extends Config {
     #columns: Column[] = [];
     #columnsBefore: Column[] = [];
     #dexieTable?: Table;
-    #dragIndex = NaN;
+    #dragIndex = -1;
     constructor({
         control,
         values,
@@ -42,8 +50,8 @@ const ColumnsConfig = class extends Config {
             subject: 'column-settings',
         };
         super(control, state);
-        if (control.isTable) {
-            this.#columns = structuredClone(datatable.state.columns);
+        if (control.isTable && datatable.state.dexieTable) {
+            this.#columns = structuredClone(datatable.columns);
             this.#columnsBefore = structuredClone(this.#columns);
             this.#dexieTable = datatable.state.dexieTable;
         }
@@ -126,7 +134,6 @@ const ColumnsConfig = class extends Config {
                 @dragstart=${this.dragStart.bind(this)}
                 @dragenter=${this.dragEnter.bind(this)}
                 @dragend=${this.dragEnd.bind(this)}
-                data-columnindex=${index}
             >
                 <td draggable="true" class="center" title="drag & drop to change order">
                     ${index + 1}
@@ -138,16 +145,10 @@ const ColumnsConfig = class extends Config {
         `;
     }
     columnFormatSelect(format: string, index: number) {
-        const options = {
-            '': '',
-            date: 'date',
-            url: 'url',
-            image: 'image',
-        };
         return selectbox({
             name: 'format-' + index,
             '@change': this.formatChanged.bind(this, index),
-            options,
+            options: columnFormatOptions(),
             selected: format,
         });
     }
@@ -164,40 +165,58 @@ const ColumnsConfig = class extends Config {
         }
     }
     visibilityCheckboxChanged(index: number, event: Event) {
-        const target = event.target as HTMLInputElement;
+        const target = event.currentTarget;
+        if (!(target instanceof HTMLInputElement)) return;
         this.#columns[index].visible = target.checked;
         this.saveColumns();
         this.render();
     }
     formatChanged(index: number, event: Event) {
-        const target = event.target as HTMLInputElement;
-        const format = ['date', 'url', 'image'].includes(target.value)
-            ? target.value
-            : '';
-        this.#columns[index].format = format;
+        const target = event.currentTarget;
+        if (!(target instanceof HTMLSelectElement)) return;
+        this.#columns[index].format = isColumnFormat(target.value) ? target.value : '';
         this.saveColumns();
         this.render();
     }
-    dragStart(event: Event) {
-        const target = event.target as HTMLElement;
-        this.#dragIndex = parseInt(target.closest('tr')?.dataset.columnindex || '');
+    dragStart(event: DragEvent) {
+        const target = event.currentTarget;
+        if (!(target instanceof HTMLElement)) return;
+        this.#dragIndex = rowIndex(target);
     }
-    dragEnter(event: Event) {
+    dragEnter(event: DragEvent) {
         event.preventDefault();
-        const target = event.target as HTMLElement;
-        const targetIndex = parseInt(target.closest('tr')?.dataset.columnindex || '');
-        if (targetIndex !== this.#dragIndex) {
+        const target = event.currentTarget;
+        if (!(target instanceof HTMLElement)) return;
+        const targetIndex = rowIndex(target);
+        if (targetIndex > -1 && targetIndex !== this.#dragIndex) {
             const columns = this.#columns;
             columns.splice(targetIndex, 0, columns.splice(this.#dragIndex, 1)[0]);
             this.#dragIndex = targetIndex;
             this.render();
         }
     }
-    dragEnd(event: Event) {
+    dragEnd(event: DragEvent) {
         event.preventDefault();
         this.saveColumns();
     }
-    isChanged() {
+    override isDefault() {
+        return super.isDefault() && this.columnsDefault();
+    }
+    columnsDefault() {
+        if (this.#columns.some((c) => c.format !== '' || c.visible === false)) {
+            return false;
+        }
+        return true;
+    }
+    override setDefaults() {
+        this.#columns.map((c) => {
+            c.format = '';
+            c.visible = true;
+        });
+        super.setDefaults();
+        this.saveColumns();
+    }
+    override isChanged() {
         return super.isChanged() || this.columnsChanged();
     }
     columnsChanged() {
@@ -212,7 +231,7 @@ const ColumnsConfig = class extends Config {
         }
         return false;
     }
-    undoChanges() {
+    override undoChanges() {
         if (this.isTable) {
             this.#columns = structuredClone(this.#columnsBefore);
             this.saveColumns();
@@ -238,7 +257,7 @@ const ColumnsConfig = class extends Config {
             values = values.filter((columnData) => columnData.name !== '*key*');
         }
         const restoredColumns: Column[] = [];
-        values.forEach((columnData: Column) => {
+        values.forEach((columnData) => {
             const foundColumn = columns.find((column) => column.name === columnData.name);
             if (foundColumn) {
                 columnData.deletedTS = null;
@@ -273,31 +292,18 @@ const ColumnsConfig = class extends Config {
         );
     }
     static async getSettings(target: AppTarget) {
-        const defaults = (await ColumnsConfig.getDefaults(target)) as ColumnsOptions;
-        let values = (await settings.get({
+        const defaults = await ColumnsConfig.getColumnsDefaults(target);
+        let values = await settings.get({
             ...target,
             subject: 'column-settings',
-        })) as ColumnsOptions;
-        values = settings.cleanupSettings(values, defaults) as ColumnsOptions;
+        });
+        values = settings.cleanupSettings(values, defaults);
         return { values, defaults };
     }
-    static async getDefaults(target: AppTarget) {
+    static async getColumnsDefaults(target: AppTarget) {
         return await Config.getDefaults(target, 'column-settings', {
             ...columnsDefaultOptions(),
             ...columnsDefaultOrder(),
         });
     }
-};
-
-export const columnsDefaultOptions = () => {
-    return {
-        displayDiscoveredColumns: true,
-        previewSize: 30,
-        ...columnsDefaultOrder(),
-    };
-};
-export const columnsDefaultOrder = (): { order: string; direction: Direction } => {
-    return { order: '', direction: 'asc' };
-};
-
-export default ColumnsConfig;
+}

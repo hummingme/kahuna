@@ -1,30 +1,29 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html } from 'lit-html';
-import Config from './config.ts';
+
+import Config from '#components/config/config';
 import type {
     ControlInstance,
     ExportOptions,
     InputOption,
     Option,
     SelectOption,
-} from './types.ts';
-import { type AppTarget } from '../../lib/app-target.ts';
-import infoIcon from '../../lib/info-icon.ts';
-import settings from '../../lib/settings.ts';
-import { selfMap } from '../../lib/utils.ts';
-import { DATA_FORMATS } from '../../lib/types/common.ts';
-import type { SettingSubject } from '../../lib/types/settings.ts';
+} from '#components/config/types';
+import infoIcon from '#lib/info-icon';
+import settings from '#lib/settings';
+import { selfMap } from '#lib/utils';
+import { AppTarget, DATA_FORMATS, SettingSubject } from '#types';
 
 type ExportConfigState = {
     defaults: ExportOptions;
     subject: SettingSubject;
 } & ExportOptions;
 
-const ExportConfig = class extends Config {
+export default class ExportConfig extends Config {
     constructor({
         control,
         values,
@@ -97,25 +96,21 @@ is left blank, rows with direct values will be excluded from the export.`;
         return infoIcon(info);
     }
     static async getSettings(target: AppTarget) {
-        const defaults = (await ExportConfig.getDefaults(target)) as ExportOptions;
-        let values = (await settings.get({
+        const defaults = await ExportConfig.getExportDefaults(target);
+        let values = await settings.get({
             ...target,
             subject: 'export',
-        })) as ExportOptions;
-        values = settings.cleanupSettings(values, defaults) as ExportOptions;
+        });
+        values = settings.cleanupSettings(values, defaults);
         return { values, defaults };
     }
-    static async getDefaults(target: AppTarget): Promise<ExportOptions> {
-        return (await Config.getDefaults(
-            target,
-            'export',
-            exportDefaultOptions(),
-        )) as ExportOptions;
+    static async getExportDefaults(target: AppTarget): Promise<ExportOptions> {
+        return await Config.getDefaults(target, 'export', exportDefaultOptions());
     }
     static defaultSettings(): ExportOptions {
         return exportDefaultOptions();
     }
-};
+}
 
 export const exportDefaultOptions = () => {
     return {
@@ -129,5 +124,3 @@ export const exportDefaultOptions = () => {
         prettyJSON: false, // all targets, all formats
     };
 };
-
-export default ExportConfig;

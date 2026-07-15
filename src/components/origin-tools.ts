@@ -1,18 +1,20 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
-import Origin from './origin.ts';
-import importer from './importer.ts';
-import configLayer from './configlayer.ts';
-import messageStack from './messagestack.ts';
-import appStore from '../lib/app-store.ts';
-import { getConnection, getDB } from '../lib/connection.ts';
-import messenger from '../lib/messenger.ts';
-import svgIcon from '../lib/svgicon.ts';
-import { PlainObject } from '../lib/types/common.ts';
+
+import Origin from '#components/origin';
+import importer from '#components/importer';
+import configLayer from '#components/configlayer';
+import messageStack from '#components/messagestack';
+import appStore from '#lib/app-store';
+import { getConnection, getDB } from '#lib/connection';
+import { unescapeUnicode } from '#lib/escape-unicode';
+import messenger from '#lib/messenger';
+import svgIcon from '#lib/svgicon';
+import { PlainObject } from '#types';
 
 const summon = async (anchorId: string) => {
     await importer.init({
@@ -68,33 +70,35 @@ const createPanel = (): TemplateResult => {
 const createDatabase = async () => {
     const node = configLayer.getNode();
     if (node === undefined) return;
-    const dbnameInput = node.querySelector('#create-dbname') as HTMLInputElement;
-    const dbname = dbnameInput.value.trim();
-    const tablenameInput = node.querySelector('#create-tablename') as HTMLInputElement;
-    const tablename = tablenameInput.value.trim();
-    const indexesInput = node.querySelector('#create-indexes') as HTMLInputElement;
+    const dbnameInput = node.querySelector<HTMLInputElement>('#create-dbname');
+    const tablenameInput = node.querySelector<HTMLInputElement>('#create-tablename');
+    const indexesInput = node.querySelector<HTMLInputElement>('#create-indexes');
+    if (!dbnameInput || !tablenameInput || !indexesInput) return;
+
+    const dbname = unescapeUnicode(dbnameInput.value.trim());
+    if (dbname.length === 0) return;
+
+    const tablename = unescapeUnicode(tablenameInput.value.trim());
     const indexes = indexesInput.value.trim();
-    if (dbname.length > 0) {
-        try {
-            const db = getDB(dbname);
-            const stores: PlainObject = {};
-            if (tablename.length > 0) {
-                stores[tablename] = indexes;
-            }
-            db.version(0.1).stores(stores);
-            await getConnection(dbname);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'unknown error';
-            messageStack.displayError(`Error creating database: ${message}`);
+    try {
+        const db = getDB(dbname);
+        const stores: PlainObject = {};
+        if (tablename.length > 0) {
+            stores[tablename] = indexes;
         }
-        const databases = await Origin.getDatabases();
-        appStore.update({
-            loading: false,
-            databases,
-        });
-        messenger.post({ type: 'changedDatabases' });
-        configLayer.close();
+        db.version(0.1).stores(stores);
+        await getConnection(dbname);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'unknown error';
+        messageStack.displayError(`Error creating database: ${message}`);
     }
+    const databases = await Origin.getDatabases();
+    appStore.update({
+        loading: false,
+        databases,
+    });
+    messenger.post({ type: 'changedDatabases' });
+    configLayer.close();
 };
 
 const OriginTools = {

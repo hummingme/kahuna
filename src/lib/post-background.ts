@@ -1,11 +1,11 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { namespace, NSPort } from './runtime.ts';
-import { sleep } from './utils.ts';
-import { type Message } from './types/messages.ts';
+import { namespace, NSPort } from '#lib/runtime';
+import { sleep } from '#lib/utils';
+import { type Message } from '#types';
 
 let backgroundPort: NSPort | null = null;
 

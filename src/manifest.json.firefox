@@ -1,7 +1,8 @@
 {
-    "name": "Kahuna",
-    "version": "1.5.2",
-    "description": "Browse, edit and manage IndexedDB databases.",
+    "name": "Kahuna, the IndexedDB-Manager",
+    "short_name": "Kahuna",
+    "version": "1.6",
+    "description": "Browse, manage and edit IndexedDB databases.",
     "author":"Lutz Brückner",
     "homepage_url":"https://github.com/hummingme/kahuna#readme",
     "manifest_version": 2,
@@ -17,7 +18,8 @@
         "js": ["contentscript.js"]
     }],
     "permissions": [
-        "*://*/*"
+        "*://*/*",
+        "scripting"
     ],
     "browser_action": {
         "default_icon": {
@@ -39,6 +41,7 @@
         "kahuna.js",
         "code_worker.js",
         "contentscript_worker.js",
+        "injected_export_import.js",
         "icons/kahuna.svg",
         "icons/kahuna-16.png",
         "icons/kahuna-32.png",
@@ -49,7 +52,10 @@
     "browser_specific_settings": {
         "gecko": {
             "id": "dev@kahuna.rocks",
-            "strict_min_version": "128.0"
+            "strict_min_version": "128.0",
+            "data_collection_permissions": {
+                "required": ["none"]
+            }
         }
     }
 }

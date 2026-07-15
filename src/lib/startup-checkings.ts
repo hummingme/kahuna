@@ -1,13 +1,14 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import messageStack from '../components/messagestack.ts';
-import UpdateInfo from '../components/update-info.ts';
-import appStore from './app-store.ts';
-import env from './environment.ts';
-import settings from './settings.ts';
+import messageStack from '#components/messagestack';
+import UpdateInfo from '#components/update-info';
+import appStore from '#lib/app-store';
+import env from '#lib/environment';
+import { hideMessageType, getHiddenMessagesOrigin } from './hidden-messages';
+import settings from '#lib/settings';
 
 const startupCheckings = () => {
     if (env.codeExecution === false) {
@@ -30,7 +31,7 @@ const compareSemanticVersions = (v1: string, v2: string) => {
 };
 
 const displayNoCodeExecutionInfo = () => {
-    if (settings.global('hiddenMessages').has('noCodeExecution')) {
+    if (getHiddenMessagesOrigin().includes('noCodeExecution')) {
         return;
     }
     const origin = window.location.origin;
@@ -39,20 +40,9 @@ starting webworkers is blocked on ${origin}. Therefore some features are not \
 available on this origin.`;
     const checkbox = {
         label: "don't show this message again for this origin",
-        '@change': hideNoCodeExecutionInfo,
+        '@change': hideMessageType.bind(null, 'noCodeExecution'),
     };
     messageStack.displayInfo(content, { checkbox });
-};
-
-const hideNoCodeExecutionInfo = (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    const hiddenMessages = settings.global('hiddenMessages');
-    if (target.checked) {
-        hiddenMessages.add('noCodeExecution');
-    } else {
-        hiddenMessages.delete('noCodeExecution');
-    }
-    settings.saveGlobals({ hiddenMessages });
 };
 
 export default startupCheckings;

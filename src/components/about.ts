@@ -1,15 +1,16 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html } from 'lit-html';
-import appWindow from './app-window.ts';
-import ModalWindow from './modal-window.ts';
-import appStore from '../lib/app-store.ts';
-import env from '../lib/environment.ts';
-import { extensionUrl } from '../lib/runtime.ts';
-import { itemsList, paragraph } from '../lib/text-output.ts';
+
+import appWindow from '#components/app-window';
+import ModalWindow from '#components/modal-window';
+import appStore from '#lib/app-store';
+import env from '#lib/environment';
+import { extensionUrl } from '#lib/runtime';
+import { itemsList, paragraph } from '#lib/text-output';
 // @ts-expect-error TS2307
 import * as build from 'buildinfo.js';
 
@@ -81,15 +82,23 @@ class About extends ModalWindow {
         `The source code is [available on github]`,
     ];
     readonly features = [
-        "signals with its icon in the browser's address bar when IndexedDB databases exist for a visited website",
-        'displays lists of the found databases and tables (object stores)',
-        'imports and exports databases in dexie format',
-        'can create new databases, as well as copy and delete existing databases',
-        'its schema editor can be used to create and delete tables, and to modify the indexes of tables',
-        'imports and exports tables in dexie, json and csv format, as well as selected data records in json and csv format',
-        'displays the saved data of a table page by page and enables the editing and deletion of data records',
-        'filters can be configured and combined for all data fields to display or export a selection of an object stores data',
-        'enables the entry and execution of JavaScript code to modify databases, tables or data',
+        'Designed for debugging, testing, data migration, inspection and modification of IndexedDB databases.',
+        'Opens as an overlay on top of the visited website, toggled by the extension icon or a keyboard shortcut.',
+        'Displays lists of databases and tables (aka object stores) stored for an origin.',
+        'Create new databases, as well as copy and delete existing databases. Create empty copies that preserve only the schema.',
+        'Edit the database schema: add or remove tables and indexes on existing tables.',
+        'Displays table data in a paginated, sortable grid with configurable, reorderable, and hideable columns. Select records for editing, deletion or export.',
+        'Combinable filters per field, including equals, comparison, starts/ends-with, contains, empty, and regular expression matches.',
+        "Includes a JavaScript console to modify databases, tables or data by code and via Dexie's API.",
+        'Edit values of every IndexedDB type supported by browsers, including Arrays, Objects, Maps, Sets, Dates, RegExps, typed arrays, Blobs, Files, ImageData, Undefined, and 24 more.',
+        'For editing values, switch between form-based editors and editable JavaScript source code for complex values. Type conversion is performed for compatible types when the value type is switched.',
+        'Upload files to replace String, Blob, File, ArrayBuffer, DataView, ImageBitmap, ImageData values. Upload CSV or JSON files as data for Object, Set, Array and typed array values.',
+        'Auto-formats columns as dates, URLs, or image previews where the data fits.',
+        'Import and export complete databases in Dexie format.',
+        'Import and export tables in Dexie, JSON and CSV format, as well as selected data records in JSON and CSV format.',
+        'Configure display options, editor behavior, filtering, import and export globally, per database or per table.',
+        "Indicates with a badge on it's toolbar icon the number of IndexedDB databases stored for the currently visited origin.",
+        'Works with both Firefox and Chromium-based browsers while respecting the capabilities and restrictions of each browser.',
     ];
     readonly acknowledgments = [
         '[Dexie] wrapper library for the IndexedDB browser API',

@@ -4,7 +4,7 @@ source ./scripts/settings.sh "$1" "$2"
 
 BUNDLES=("kahuna.js" "contentscript.js" "contentscript_worker.js")
 if [ "$TARGET" = "firefox" ]; then
-    BUNDLES+=("background.js")
+    BUNDLES+=("background.js" "injected_export_import.js")
 elif [ "$TARGET" = "chromium" ]; then
     BUNDLES+=("background_worker.js")
 fi;

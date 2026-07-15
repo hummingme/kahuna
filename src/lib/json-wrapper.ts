@@ -1,9 +1,9 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { type TypedArrayType, getType, typedarrayTypes } from './datatypes.ts';
+import { getType, isTypedArrayType } from '#lib/datatypes';
 
 type WrappedType = 'date' | 'bigint64array' | 'biguint64array' | 'arraybuffer' | 'bigint';
 
@@ -28,7 +28,7 @@ export function replacer(_key: unknown, value: any): object | WrappedValue {
             value: JSON.stringify(value),
         };
     }
-    if (typedarrayTypes.includes(type as TypedArrayType)) {
+    if (isTypedArrayType(type)) {
         let val = [...value.values()];
         if (['bigint64array', 'biguint64array'].includes(type)) {
             val = val.map((v) => v.toString());
@@ -58,7 +58,7 @@ export const reviver = (_key: string, value: WrappedValue | any): any => {
         if (value.idxdbmType === 'date') {
             return new Date(value.value);
         }
-        if (typedarrayTypes.includes(value.idxdbmType)) {
+        if (isTypedArrayType(value.idxdbmType)) {
             if (value.idxdbmType === 'bigint64array') {
                 return new BigInt64Array(value.value.map((val: string) => BigInt(val)));
             }

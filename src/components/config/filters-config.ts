@@ -1,15 +1,15 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html } from 'lit-html';
-import Config from './config.ts';
-import FilterFieldsConfig from './filter-fields-config.ts';
-import type { ControlInstance, FiltersOptions, Option } from './types.ts';
-import settings from '../../lib/settings.ts';
-import { type AppTarget } from '../../lib/app-target.ts';
-import { SettingSubject } from '../../lib/types/settings.ts';
+
+import Config from '#components/config/config';
+import FilterFieldsConfig from '#components/config/filter-fields-config';
+import type { ControlInstance, FiltersOptions, Option } from '#components/config/types';
+import settings from '#lib/settings';
+import { AppTarget, SettingSubject } from '#types';
 
 type FiltersConfigState = {
     defaults: FiltersOptions;
@@ -18,7 +18,7 @@ type FiltersConfigState = {
 
 type FilterFieldsConfigInstance = InstanceType<typeof FilterFieldsConfig>;
 
-const FiltersConfig = class extends Config {
+export default class FiltersConfig extends Config {
     #filterFieldsConfig;
     constructor({
         control,
@@ -62,56 +62,54 @@ const FiltersConfig = class extends Config {
     ];
     view() {
         return html`
-            ${this.#filterFieldsConfig.view(this.state.markUnindexed as boolean)}
+            ${this.#filterFieldsConfig.view(!!this.state.markUnindexed)}
             ${this.checkboxOptionsView()}
         `;
     }
-    isDefault() {
+    override isDefault() {
         const filterFieldsDefault = this.isTable
             ? this.#filterFieldsConfig.isDefault()
             : true;
         return super.isDefault() && filterFieldsDefault;
     }
-    setDefaults() {
+    override setDefaults() {
         if (this.isTable) {
             this.#filterFieldsConfig.setDefaults();
         }
         super.setDefaults();
     }
-    isChanged() {
+    override isChanged() {
         const filterFieldsChanged = this.isTable
             ? this.#filterFieldsConfig.isChanged()
             : false;
         return super.isChanged() || filterFieldsChanged;
     }
-    undoChanges() {
+    override undoChanges() {
         if (this.isTable) {
             this.#filterFieldsConfig.undoChanges();
         }
         super.undoChanges();
     }
     static async getSettings(target: AppTarget) {
-        const defaults = (await FiltersConfig.getDefaults(target)) as FiltersOptions;
-        let values = (await settings.get({
+        const defaults = await FiltersConfig.getFiltersDefaults(target);
+        let values = await settings.get({
             ...target,
             subject: 'filter-settings',
-        })) as FiltersOptions;
-        values = settings.cleanupSettings(values, defaults) as FiltersOptions;
+        });
+        values = settings.cleanupSettings(values, defaults);
         return { values, defaults };
     }
-    static async getDefaults(target: AppTarget) {
-        return (await Config.getDefaults(
+    static async getFiltersDefaults(target: AppTarget) {
+        return await Config.getDefaults(
             target,
             'filter-settings',
             filtersDefaultOptions(),
-        )) as FiltersOptions;
+        );
     }
-};
+}
 
 export const filtersDefaultOptions = () => {
     return {
         markUnindexed: true,
     };
 };
-
-export default FiltersConfig;

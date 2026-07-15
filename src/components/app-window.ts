@@ -1,27 +1,29 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, render, TemplateResult } from 'lit-html';
 import { ref, createRef, type Ref } from 'lit/directives/ref.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import About from './about.ts';
-import configLayer from './configlayer.ts';
-import { loadingPanel, type LoadingViewParams } from './loadingpanel.ts';
-import mainMenu from './main-menu.ts';
-import messageStack from './messagestack.ts';
-import schemaEditor from './schema-editor.ts';
-import tooltip from './tooltip.ts';
-import UpdateInfo from './update-info.ts';
-import appStore from '../lib/app-store.ts';
-import { button } from '../lib/button.ts';
-import env from '../lib/environment.ts';
-import messenger from '../lib/messenger.ts';
-import { extensionUrl } from '../lib/runtime.ts';
-import { AppWindowSettings, settings } from '../lib/settings.ts';
-import svgIcon from '../lib/svgicon.ts';
-import { clamp, between, fetchFile, pickProperties } from '../lib/utils.ts';
+
+import About from '#components/about';
+import configLayer from '#components/configlayer';
+import { loadingPanel, type LoadingViewParams } from '#components/loadingpanel';
+import mainMenu from '#components/main-menu';
+import messageStack from '#components/messagestack';
+import schemaEditor from '#components/schema-editor';
+import tooltip from '#components/tooltip';
+import UpdateInfo from '#components/update-info';
+import appStore from '#lib/app-store';
+import { button } from '#lib/button';
+import env from '#lib/environment';
+import messenger from '#lib/messenger';
+import { extensionUrl } from '#lib/runtime';
+import { settings } from '#lib/settings';
+import svgIcon from '#lib/svgicon';
+import { clamp, between, fetchFile, pickProperties } from '#lib/utils';
+import { AppWindowSettings } from '#types';
 
 interface AppWindowState {
     visible: boolean;
@@ -68,7 +70,7 @@ const AppWindow = class {
     #winRef: Ref<HTMLDivElement> = createRef(); // own root node of this appwindow
     #overlayRef: Ref<HTMLDivElement> = createRef(); // node of application overlay
     #winOverlayRef: Ref<HTMLDivElement> = createRef(); // node of appwindow overlay
-    #main: HTMLElement | null = null; // main stage inside of #win
+    #main: HTMLDivElement | null = null; // main stage inside of #win
     #resizers: Resizers = {
         // nodes of resize-handles
         border: null,
@@ -146,7 +148,7 @@ const AppWindow = class {
             height: '100vh',
             zIndex: 2147483001,
         });
-        document.querySelector('body')?.appendChild(host);
+        document.body.appendChild(host);
         return host;
     }
     setColors() {
@@ -190,7 +192,7 @@ const AppWindow = class {
     }
     get main() {
         if (this.#main === null) {
-            this.#main = this.#root.getElementById('main');
+            this.#main = this.#root.getElementById('main') as HTMLDivElement;
         }
         return this.#main;
     }

@@ -1,28 +1,29 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
 import { Dexie } from 'dexie';
 
-import configLayer from './configlayer.ts';
-import Database from './database.ts';
-import exporter from './exporter.ts';
-import importer from './importer.ts';
-import messageStack from './messagestack.ts';
-import Origin from './origin.ts';
-import schemaEditor from './schema-editor.ts';
-import appStore from '../lib/app-store.ts';
-import { isGlobal } from '../lib/app-target.ts';
-import checkbox from '../lib/checkbox.ts';
-import { getConnection, getDB } from '../lib/connection.ts';
-import messenger from '../lib/messenger.ts';
-import svgIcon from '../lib/svgicon.ts';
-import textinput from '../lib/textinput.ts';
-import { camelize, uniqueName } from '../lib/utils.ts';
-import { KDatabase } from '../lib/types/common.ts';
-import { copyTableData } from '../lib/dexie-utils.ts';
+import configLayer from '#components/configlayer';
+import Database from '#components/database';
+import exporter from '#components/exporter';
+import importer from '#components/importer';
+import messageStack from '#components/messagestack';
+import Origin from '#components/origin';
+import schemaEditor from '#components/schema-editor';
+import appStore from '#lib/app-store';
+import { isGlobal } from '#lib/app-target';
+import checkbox from '#lib/checkbox';
+import { getConnection, getDB } from '#lib/connection';
+import { copyTableData } from '#lib/dexie-utils';
+import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import messenger from '#lib/messenger';
+import svgIcon from '#lib/svgicon';
+import textinput from '#lib/textinput';
+import { camelize, uniqueName } from '#lib/utils';
+import { KDatabase } from '#types';
 
 interface DatabaseToolsState {
     dbname: string;
@@ -123,7 +124,7 @@ const DatabaseTools = class {
                 ${topic === 'delete'
                     ? configLayer.confirmOption(
                           'Are you sure to delete the database',
-                          this[state].dbname,
+                          escapeUnicode(this[state].dbname),
                           appStore.state.loading,
                       )
                     : ''}
@@ -140,7 +141,7 @@ const DatabaseTools = class {
                         size: 15,
                         class: 'right',
                         required: true,
-                        '.value': this[state].copyDatabaseName,
+                        '.value': escapeUnicode(this[state].copyDatabaseName),
                         '@change': this.optionChanged.bind(this),
                     })}
                 </div>
@@ -205,7 +206,7 @@ const DatabaseTools = class {
         ) {
             const value = ['copyData', 'copyDisplayAfterwards'].includes(option)
                 ? target.checked
-                : target.value.trim();
+                : unescapeUnicode(target.value.trim());
             this[state] = { ...this[state], [option]: value };
         }
     }
@@ -219,7 +220,7 @@ const DatabaseTools = class {
         }
         appStore.update({
             loading: true,
-            loadingMsg: `copying database, source: ${source}, target: ${target}`,
+            loadingMsg: `copying database, source: ${escapeUnicode(source)}, target: ${escapeUnicode(target)}`,
         });
         configLayer.close();
         try {
@@ -248,7 +249,7 @@ const DatabaseTools = class {
             Origin.summon();
         }
         messageStack.displaySuccess(
-            `Database copied! (source: ${source}, target: ${target})`,
+            `Database copied! (source: ${escapeUnicode(source)}, target: ${escapeUnicode(target)})`,
         );
     }
     validateCopyOptions(databaseName: string, version: string): object | undefined {
@@ -284,7 +285,7 @@ const DatabaseTools = class {
         const tablenameInput = node.querySelector(
             '#create-tablename',
         ) as HTMLInputElement;
-        const tablename = tablenameInput.value.trim();
+        const tablename = unescapeUnicode(tablenameInput.value.trim());
         const indexesInput = node.querySelector('#create-indexes') as HTMLInputElement;
         const indexes = indexesInput.value.trim();
         if (tablename.length > 0) {

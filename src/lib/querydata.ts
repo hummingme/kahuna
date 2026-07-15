@@ -1,35 +1,27 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import type { Collection, IndexSpec, Table } from 'dexie';
-import { getConnection } from './connection.ts';
-import { collectionToArray } from './dexie-utils.ts';
+
+import { getConnection } from '#lib/connection';
+import { collectionToArray } from '#lib/dexie-utils';
 import {
     getFuncFilter,
     getFuncIndexed,
     isIndexedFilter,
-    indexedMethods,
     isCompoundHeadIndexed,
+} from '#lib/filter';
+import { hasIntersection, resolvePath } from '#lib/utils';
+import {
+    indexedMethods,
     type Filter,
     type IndexedMethod,
     type IndexedWhereClauseMethods,
-} from './filter.ts';
-import { hasIntersection, resolvePath } from './utils.ts';
-import type { PlainObject } from './types/common.ts';
-
-export interface QueryDataArgs {
-    dbname: string;
-    tablename: string;
-    filters: Filter[];
-    order: string;
-    direction: 'asc' | 'desc';
-    addUnnamedPk: boolean;
-    offset: number;
-    limit: number;
-    encodeQueryResult: boolean;
-}
+    type QueryDataArgs,
+    type UnknownRecord,
+} from '#types';
 
 export const queryData = async (args: QueryDataArgs) => {
     const dbHandle = await getConnection(args.dbname);
@@ -57,7 +49,7 @@ export const applyFilters = (
         filters = optimizeApplyOrder(filters);
         if (filters[0].field === '*key*') {
             collection = applyUnnamedPkFilters(dexieTable, filters);
-            filters = filters.filter((f) => f.field != '*key*');
+            filters = filters.filter((f) => f.field !== '*key*');
         } else {
             const filter = filters.shift()!;
             const search = prepareSearchValue(filter);
@@ -255,12 +247,9 @@ const prepareSearchValue = ({ search, method }: { search: string; method: string
 
 const orderCollection = async (
     collection: Collection,
-    {
-        order,
-        direction,
-        addUnnamedPk,
-    }: Pick<QueryDataArgs, 'order' | 'direction' | 'addUnnamedPk'>,
-): Promise<Collection | PlainObject[]> => {
+    args: QueryDataArgs,
+): Promise<Collection | UnknownRecord[]> => {
+    const { order, direction, addUnnamedPk } = args;
     if (order === '') {
         return collection;
     }
@@ -270,9 +259,15 @@ const orderCollection = async (
         const up = direction === 'asc' ? 1 : -1;
         const down = -up;
         data.sort((a, b) => {
-            if (a[order] === undefined) return down;
-            if (b[order] === undefined) return up;
-            return a[order] > b[order] ? up : down;
+            const va = a[order];
+            const vb = b[order];
+            if (va === null) return down;
+            if (vb === null) return up;
+            if (typeof va === 'number' && typeof vb === 'number') {
+                return va > vb ? up : down;
+            }
+
+            return String(va).localeCompare(String(vb)) < 0 ? up : down;
         });
     }
     return data;
@@ -283,7 +278,7 @@ const orderCollection = async (
  * as direct properties of the data rows. The same applies when sorting
  * by type-specific KeyPaths. i.e String.length or File.lastModified
  */
-const ensureOrderData = (data: PlainObject[], order: string): object[] => {
+const ensureOrderData = (data: UnknownRecord[], order: string): UnknownRecord[] => {
     if (order.includes('.')) {
         for (const row of data) {
             row[order] = resolvePath(row, order);
@@ -292,10 +287,9 @@ const ensureOrderData = (data: PlainObject[], order: string): object[] => {
     return data;
 };
 
-const orderDexieTable = async (
-    dexieTable: Table,
-    { order, direction, addUnnamedPk }: QueryDataArgs,
-) => {
+const orderDexieTable = async (dexieTable: Table, args: QueryDataArgs) => {
+    const direction = args.direction;
+    let order = args.order;
     const { primKey, indexes } = dexieTable.schema;
     if (order === '*key*') order = ':id';
 
@@ -307,11 +301,7 @@ const orderDexieTable = async (
             ? dexieTable.orderBy(order)
             : dexieTable.orderBy(order).reverse();
     } else {
-        return orderCollection(dexieTable.toCollection(), {
-            order,
-            direction,
-            addUnnamedPk,
-        });
+        return orderCollection(dexieTable.toCollection(), args);
     }
 };
 
@@ -333,12 +323,12 @@ const isIndexedOrder = (order: string, indexes: IndexSpec[]) => {
     return false;
 };
 
-const totalData = async (ordered: Collection | PlainObject[]): Promise<number> => {
+const totalData = async (ordered: Collection | UnknownRecord[]): Promise<number> => {
     return isCollection(ordered) ? await ordered.count() : ordered.length;
 };
 
 const paginateData = async (
-    ordered: Collection | PlainObject[],
+    ordered: Collection | UnknownRecord[],
     { offset, limit, addUnnamedPk }: QueryDataArgs,
 ) => {
     if (isCollection(ordered)) {

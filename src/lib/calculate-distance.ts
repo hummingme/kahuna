@@ -1,4 +1,9 @@
-import type { Position } from './types/common.ts';
+/**
+ * SPDX-License-Identifier: MPL-2.0
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
+ */
+
+import { Position } from '#types';
 
 const calculateDistance = (node: HTMLElement, from: Position) => {
     const { x, y } = from;

@@ -1,22 +1,22 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import Database from '../components/database.ts';
-import datatable from '../components/datatable.ts';
-import type { LoadingViewParams } from '../components/loadingpanel.ts';
-import Origin from '../components/origin.ts';
-import { type AppTarget, isGlobal } from './app-target.ts';
-import messenger from './messenger.ts';
-import settings from './settings.ts';
-import type { KDatabase, KTable } from './types/common.ts';
+import Database from '#components/database';
+import datatable from '#components/datatable';
+import type { LoadingViewParams } from '#components/loadingpanel';
+import Origin from '#components/origin';
+import { isGlobal } from '#lib/app-target';
+import messenger from '#lib/messenger';
+import settings from '#lib/settings';
+import type { AppTarget, KDatabase, KTable } from '#types';
 
 export interface AppState extends LoadingViewParams {
     databases: KDatabase[];
-    selectedDB?: number;
+    selectedDB?: number | undefined;
     tables: KTable[];
-    selectedTable?: number;
+    selectedTable?: number | undefined;
     aboutVisible: boolean;
     updateInfoVisible: boolean;
 }
@@ -100,20 +100,19 @@ const AppStore = class {
         return this.#state.loading;
     }
     async initialState(): Promise<AppState> {
-        const onLoadTarget = settings.global('onLoadTarget');
+        const onLoadTarget = settings.global('onLoadTargets').get(location.host);
         const targetValues = await this.initTargetValues(onLoadTarget);
         return {
             ...this.emptyState,
             ...targetValues,
         };
     }
-    async initTargetValues(target: AppTarget) {
+    async initTargetValues(target?: AppTarget) {
         const databases = await Origin.getDatabases();
         let selectedDB,
             selectedTable,
             tables: KTable[] = [];
-
-        if (target.database !== '*') {
+        if (target && target.database !== '*') {
             selectedDB = databases.findIndex((db) => db.name == target.database);
             if (selectedDB === -1) {
                 selectedDB = undefined;

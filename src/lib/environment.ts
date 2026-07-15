@@ -1,13 +1,12 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import appWindow from '../components/app-window.ts';
-import messenger from './messenger.ts';
-import { manifestVersion } from './runtime.ts';
-import type { ExecutionMethod } from './types/common.ts';
-import type { Message } from './types/messages.ts';
+import appWindow from '#components/app-window';
+import messenger from '#lib/messenger';
+import { manifestVersion } from '#lib/runtime';
+import type { ExecutionMethod, Message } from '#types';
 
 interface EnvironmentValues {
     version: string;
@@ -18,6 +17,7 @@ interface EnvironmentValues {
     workersBlocked: boolean;
     preferedColorScheme: 'light' | 'dark';
     bigIntArrayFlaw: boolean;
+    fileSystemApiSupported: boolean;
 }
 
 class Environment {
@@ -29,12 +29,14 @@ class Environment {
         unsafeEval: false, // unsafe eval expressions are blocked, typically due to Manifest 3
         workersBlocked: false, // no Worker can be started, typically due to CSP restrictions
         preferedColorScheme: 'light',
-        bigIntArrayFlaw: false, // in Firefox, BigInt64Arrays are not accessible when sent from worker
+        bigIntArrayFlaw: true, // in Firefox, BigInt64Arrays are not accessible when sent from worker
+        fileSystemApiSupported: false,
     };
     async init() {
         this.#env.unsafeEval = this.checkUnsafeEval();
         this.#env.preferedColorScheme = this.checkPreferedColorScheme();
         this.#env.manifestVersion = manifestVersion;
+        this.#env.fileSystemApiSupported = await this.checkFileSystemApiSuppport();
         this.colorSchemeQuery.addEventListener(
             'change',
             this.preferedColorSchemeChanged.bind(this),
@@ -51,6 +53,13 @@ class Environment {
     }
     get manifestVersion() {
         return this.#env.manifestVersion;
+    }
+    get isFirefox() {
+        return (
+            'InstallTrigger' in globalThis &&
+            'MozTransition' in document.documentElement.style &&
+            'buildID' in navigator
+        );
     }
     get permissions() {
         return this.#env.permissions;
@@ -69,6 +78,9 @@ class Environment {
     }
     get bigIntArrayFlaw() {
         return this.#env.bigIntArrayFlaw;
+    }
+    get fileSystemApiSupported() {
+        return this.#env.fileSystemApiSupported;
     }
     get codeExecution() {
         return this.codeExecutionMethods.length > 0;
@@ -89,7 +101,13 @@ class Environment {
         unsafeEval: () => this.unsafeEval === true,
         userscript: () => this.permissions?.includes('userScripts'),
     };
-
+    executionMethod(preferedMethod: ExecutionMethod) {
+        const availableMethods = this.codeExecutionMethods;
+        if (availableMethods.includes(preferedMethod)) {
+            return preferedMethod;
+        }
+        return availableMethods.shift();
+    }
     checkUnsafeEval() {
         try {
             Function()();
@@ -100,6 +118,15 @@ class Environment {
             } else {
                 throw error;
             }
+        }
+    }
+    async checkFileSystemApiSuppport() {
+        try {
+            const root = await navigator.storage.getDirectory();
+            structuredClone(root);
+            return true;
+        } catch (_e) {
+            return false;
         }
     }
     colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');

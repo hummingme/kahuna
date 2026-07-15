@@ -1,12 +1,12 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import ApplicationConfigDefaults from './components/config/application-defaults.ts';
-import { pickProperties } from './lib/utils.ts';
-import ContentscriptMessenger from './lib/contentscript-messenger.ts';
-import { type Message } from './lib/types/messages.ts';
+import ApplicationConfigDefaults from '#components/config/application-defaults';
+import { pickProperties } from '#lib/utils';
+import ContentscriptMessenger from '#lib/contentscript-messenger';
+import { Message, UnknownRecord } from '#types';
 
 export interface ContentScriptType {
     handleGlobalSettings: (msg: Message) => void;
@@ -77,7 +77,6 @@ const ContentScript = class {
                     dbh.close();
                     resolve(stores.length > 0 ? true : false);
                 }
-                // With typescript, what is the type of an IDBVersionChangeEvent's target?
                 const request = indexedDB.open(name, version);
                 request.onupgradeneeded = (event) => {
                     const target = event.target as IDBOpenDBRequest;
@@ -134,14 +133,14 @@ const ContentScript = class {
     }
     fromSaveGlobalSettings(msg: Message) {
         return msg.type === 'saveSettings' && msg.data.subject === 'globals'
-            ? msg.data.values
+            ? (msg.data.values as UnknownRecord)
             : null;
     }
-    fromObtainGlobalSettings(msg: Message) {
+    fromObtainGlobalSettings(msg: Message): UnknownRecord | null {
         return msg.type === 'obtainSettings' &&
             (Object.hasOwn(msg.values, 'ignoreDatabases') ||
                 Object.hasOwn(msg.values, 'dontNotifyEmpty'))
-            ? msg.values
+            ? (msg.values as UnknownRecord)
             : null;
     }
 };

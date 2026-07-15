@@ -77,11 +77,6 @@
     <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
     <path d="M5 12l5 5l10 -10"></path>
   </symbol>
-  <symbol id="tabler-circle-check" viewBox="0 0 24 24">
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
-    <path d="M9 12l2 2l4 -4" />
-  </symbol>
   <symbol id="tabler-circle-dot" viewBox="0 0 24 24">
     <path stroke="none" d="M0 0h24v24H0z" fill="none" />
     <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
@@ -123,6 +118,20 @@
     <path d="M18 4v1" />
     <path d="M18 9v11" />
   </symbol>
+  <symbol id="tabler-adjustments-code" viewBox="0 0 24 24">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M4 10a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+    <path d="M6 4v4" />
+    <path d="M6 12v8" />
+    <path d="M13.557 14.745a2 2 0 1 0 -1.557 3.255" />
+    <path d="M12 4v10" />
+    <path d="M12 18v2" />
+    <path d="M16 7a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+    <path d="M18 4v1" />
+    <path d="M18 9v4" />
+    <path d="M20 21l2 -2l-2 -2" />
+    <path d="M17 17l-2 2l2 2" />
+  </symbol>
   <symbol id="tabler-adjustments-search" viewBox="0 0 24 24">
     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
     <path d="M4 10a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
@@ -135,18 +144,6 @@
     <path d="M18 9v2" />
     <path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
     <path d="M20.2 20.2l1.8 1.8" />
-  </symbol>
-  <symbol id="tabler-ghost" viewBox="0 0 24 24">
-    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-    <path d="M5 11a7 7 0 0 1 14 0v7a1.78 1.78 0 0 1 -3.1 1.4a1.65 1.65 0 0 0 -2.6 0a1.65 1.65 0 0 1 -2.6 0a1.65 1.65 0 0 0 -2.6 0a1.78 1.78 0 0 1 -3.1 -1.4v-7" />
-    <path d="M10 10l.01 0" />
-    <path d="M14 10l.01 0" />
-    <path d="M10 14a3.5 3.5 0 0 0 4 0" />
-  </symbol>
-  <symbol id="tabler-plus" viewBox="0 0 24 24">
-    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-    <path d="M12 5l0 14" />
-    <path d="M5 12l14 0" />
   </symbol>
   <symbol id="tabler-maximize" viewBox="0 0 24 24">
     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
@@ -166,12 +163,6 @@
     <path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6" />
     <path d="M11 13l9 -9" />
     <path d="M15 4h5v5" />
-  </symbol>
-  <symbol id="tabler-pencil-off" viewBox="0 0 24 24">
-    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-    <path d="M10 10l-6 6v4h4l6 -6m1.99 -1.99l2.504 -2.504a2.828 2.828 0 1 0 -4 -4l-2.5 2.5" />
-    <path d="M13.5 6.5l4 4" />
-    <path d="M3 3l18 18" />
   </symbol>
   <symbol id="tabler-stack-push" viewBox="0 0 24 24">
     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
@@ -197,11 +188,6 @@
     <path stroke="none" d="M0 0h24v24H0z" fill="none" />
     <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
     <path d="M10 10l4 4m0 -4l-4 4" />
-  </symbol>
-  <symbol id="tabler-bell" viewBox="0 0 24 24">
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    <path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6" />
-    <path d="M9 17v1a3 3 0 0 0 6 0v-1" />
   </symbol>
   <symbol id="tabler-mood-wrrr" viewBox="0 0 24 24">
     <path stroke="none" d="M0 0h24v24H0z" fill="none" />
@@ -232,5 +218,15 @@
     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
     <path d="M9 14l-4 -4l4 -4" />
     <path d="M5 10h11a4 4 0 1 1 0 8h-1" />
-  </symbol>  
+  </symbol>
+  <symbol viewBox="0 0 24 24" id="tabler-brand-lastfm">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M20 8c-.83 -1 -1.388 -1 -2 -1c-.612 0 -2 .271 -2 2s1.384 2.233 3 3c1.616 .767 2.125 1.812 2 3s-1 2 -3 2s-3 -1 -3.5 -2s-1.585 -4.78 -2.497 -6a5 5 0 1 0 -1 7" />
+  </symbol>
+  <symbol viewBox="0 0 24 24" id="tabler-device-floppy">
+	<path stroke="none" d="M0 0h24v24H0z" fill="none" />
+	<path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" />
+	<path d="M10 14a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+	<path d="M14 4l0 4l-6 0l0 -4" />
+</symbol>
 </svg>

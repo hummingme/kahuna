@@ -1,19 +1,20 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, render } from 'lit-html';
 import { ref } from 'lit/directives/ref.js';
 import { keyed } from 'lit/directives/keyed.js';
-import appWindow from './app-window.ts';
-import BehaviorConfig from './config/behavior-config.ts';
-import appStore from '../lib/app-store.ts';
-import type { AppTarget } from '../lib/app-target.ts';
-import { emptyTarget, equalTarget } from '../lib/app-target.ts';
-import checkbox, { type CheckboxProps } from '../lib/checkbox.ts';
-import messenger from '../lib/messenger.ts';
-import svgIcon from '../lib/svgicon.ts';
+
+import appWindow from '#components/app-window';
+import BehaviorConfig from '#components/config/behavior-config';
+import appStore from '#lib/app-store';
+import { emptyTarget, equalTarget } from '#lib/app-target';
+import checkbox, { type CheckboxProps } from '#lib/checkbox';
+import messenger from '#lib/messenger';
+import svgIcon from '#lib/svgicon';
+import { AppTarget } from '#types';
 
 interface MessageStackState {
     messages: StackMessage[];
@@ -26,7 +27,7 @@ interface StackMessage {
     type: StackMessageType;
     count: number;
     order: number;
-    timer?: number;
+    timer?: number | undefined;
     checkbox?: CheckboxProps;
 }
 type StackMessageType = 'success' | 'info' | 'warn' | 'error';
@@ -73,8 +74,8 @@ const MessageStack = class {
         `;
     }
     nodeReady(node?: Element) {
-        if (node !== undefined) {
-            this.#node = node as HTMLElement;
+        if (node instanceof HTMLElement) {
+            this.#node = node;
         }
     }
     async render() {
@@ -175,8 +176,8 @@ const MessageStack = class {
                   : `Unknown Error: ${JSON.stringify(error)}`;
         this.displayType('error', message);
     }
-    displayWarning(message: string) {
-        this.displayType('warn', message);
+    displayWarning(message: string, args?: Partial<StackMessage>) {
+        this.displayType('warn', message, args);
     }
     displayInfo(message: string, args?: Partial<StackMessage>) {
         this.displayType('info', message, args);
@@ -201,7 +202,7 @@ const MessageStack = class {
             if (message.timer) {
                 window.clearTimeout(message.timer);
                 message.timer = undefined;
-                const item = this.#node?.querySelector(itemSelector) as HTMLElement;
+                const item = this.#node?.querySelector<HTMLElement>(itemSelector);
                 if (item) item.style.opacity = '1';
             }
             if (message.count) {
@@ -209,9 +210,9 @@ const MessageStack = class {
             } else {
                 message.count = 1;
             }
-            const repeat = this.#node?.querySelector(
+            const repeat = this.#node?.querySelector<HTMLElement>(
                 `${itemSelector} div.msg-repeat`,
-            ) as HTMLElement;
+            );
             if (repeat) {
                 repeat.classList.remove('signal-error');
                 setTimeout(() => repeat.classList.add('signal-error'), 0);
@@ -224,11 +225,11 @@ const MessageStack = class {
         this.render();
     }
     messageClicked(event: Event) {
-        const target = event.target as HTMLElement;
-        if (['INPUT', 'LABEL'].includes(target.tagName)) {
+        const target = event.target;
+        if (target instanceof HTMLInputElement || target instanceof HTMLLabelElement) {
             event.stopPropagation();
-        } else {
-            const item = target.closest('div.message-item') as HTMLElement;
+        } else if (target instanceof HTMLElement || target instanceof SVGElement) {
+            const item = target.closest<HTMLElement>('div.message-item');
             const order = parseInt(item?.dataset?.order || '');
             if (Number.isInteger(order)) {
                 const index = this[state].messages.findIndex(

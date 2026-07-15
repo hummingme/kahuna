@@ -1,61 +1,58 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import type { AppTarget } from './app-target.ts';
-import { action, manifestVersion, namespace, type NSPort } from './runtime.ts';
-import * as db from './settings-database.ts';
-import type { PlainObject } from './types/common.ts';
-import type { Message } from './types/messages.ts';
-import { SettingKey } from './types/settings.ts';
+import { action, manifestVersion, namespace, type NSPort } from '#lib/runtime';
+import {
+    clearSettings,
+    exportSettings,
+    getDatabaseTablesColumns,
+    getSettings,
+    importSettings,
+    putSettings,
+} from '#lib/settings-database';
+import type { AppTarget, Message, SettingKey, UnknownRecord } from '#types';
 
 type PortMap = Map<number, NSPort>;
-
-db.init();
 
 export const messageListener = async (
     port: NSPort,
     contentPorts: PortMap,
-    msg: unknown,
+    message: object,
 ) => {
-    const message = msg as Message;
-    if (message.type === 'saveSettings') {
-        db.putSettings(message.data);
-        handleGlobalSettings(message, port, contentPorts);
-    } else if (message.type === 'requestSettings') {
-        const values = await db.getSettings(message.key);
-        port.postMessage({ type: 'obtainSettings', values, id: message.id });
-    } else if (message.type === 'resetSettings') {
-        db.clearSettings(message.target);
-    } else if (message.type === 'foundDatabases') {
-        const tabId = port?.sender?.tab?.id;
-        if (tabId) {
-            adjustBrowserAction(tabId, message.databases);
-        }
-    } else if (message.type === 'tableDropped') {
-        handleTableDropped(message.target);
-    } else if (message.type === 'databaseDropped') {
-        handleDatabaseDropped(message.target);
-    } else if (message.type === 'getPermissions') {
-        const {
-            permissions = [],
-            hostPermissions = [],
-            version = '',
-        } = await namespace.management.getSelf();
-        if (manifestVersion === 2 && namespace.userScripts) {
-            permissions.push('userScripts');
-        }
-        const message: Message = {
-            type: 'getPermissionsResult',
-            values: { permissions, hostPermissions, version },
-        };
-        port.postMessage(message);
-    } else if (message.type === 'kahunaAlive') {
-        const tabId = port?.sender?.tab?.id;
-        if (tabId) {
-            activateActionIcon(tabId);
-        }
+    const msg = message as Message;
+    const type = msg.type;
+    const tabId = port?.sender?.tab?.id;
+    if (!tabId) return;
+
+    if (type === 'saveSettings') {
+        putSettings(msg.data);
+        handleGlobalSettings(msg, port, contentPorts);
+    } else if (type === 'requestSettings') {
+        const values = await getSettings(msg.key);
+        port.postMessage({ type: 'obtainSettings', values, id: msg.id });
+    } else if (type === 'resetSettings') {
+        clearSettings(msg.target);
+    } else if (type === 'exportSettings') {
+        const data = await exportSettings();
+        port.postMessage({ type: 'exportedSettings', data: await data.text() });
+    } else if (type === 'importSettings') {
+        handleImportMessage(msg.dataSrc, port);
+    } else if (type === 'foundDatabases') {
+        adjustBrowserAction(tabId, msg.databases);
+    } else if (type === 'tableDropped') {
+        handleTableDropped(msg.target);
+    } else if (type === 'databaseDropped') {
+        handleDatabaseDropped(msg.target);
+    } else if (type === 'getPermissions') {
+        handleGetPermissions(port);
+    } else if (type === 'injectExportImport') {
+        injectExportImport(tabId);
+    } else if (type === 'kahunaAlive') {
+        activateActionIcon(tabId);
+    } else {
+        throw new Error(`Kahuna: Received unexpected message: ${msg.type}`);
     }
 };
 
@@ -113,17 +110,58 @@ const activateActionIcon = (tabId: number) => {
 
 const handleTableDropped = async (target: AppTarget) => {
     const key: SettingKey = { ...target, subject: 'columns' };
-    const columns = await db.getSettings(key);
-    if (columns.length > 0) {
-        columns.map((column: PlainObject) => (column.deletedTS = Date.now()));
-        db.putSettings({ ...key, values: columns });
+    const columns = await getSettings(key);
+    if (Array.isArray(columns) && columns.length > 0) {
+        columns.map((column: UnknownRecord) => (column.deletedTS = Date.now()));
+        putSettings({ ...key, values: columns });
     }
 };
 
 const handleDatabaseDropped = async (target: AppTarget) => {
-    const data = await db.getDatabaseTablesColumns(target.database);
+    const data = await getDatabaseTablesColumns(target.database);
     for (const tableData of data) {
-        tableData.values.map((column: PlainObject) => (column.deletedTS = Date.now()));
-        db.putSettings(tableData);
+        if (Array.isArray(tableData.values)) {
+            tableData.values.map((column) => (column.deletedTS = Date.now()));
+            putSettings(tableData);
+        }
+    }
+};
+
+const handleGetPermissions = async (port: NSPort) => {
+    const {
+        permissions = [],
+        hostPermissions = [],
+        version = '',
+    } = await namespace.management.getSelf();
+    if (manifestVersion === 2 && namespace.userScripts) {
+        permissions.push('userScripts');
+    }
+    port.postMessage({
+        type: 'getPermissionsResult',
+        values: { permissions, hostPermissions, version },
+    });
+};
+
+const handleImportMessage = async (dataSrc: string | Blob, port: NSPort) => {
+    if (typeof dataSrc === 'string') {
+        const res = await fetch(dataSrc);
+        dataSrc = await res.blob();
+    }
+    const error = await importSettings(dataSrc);
+    port.postMessage({ type: 'importSettingsResult', ...(error && { error }) });
+};
+
+const injectExportImport = async (tabId: number) => {
+    if (manifestVersion !== 2) return; // for Firefox only
+    try {
+        await browser.scripting.executeScript({
+            target: {
+                tabId: tabId,
+            },
+            world: 'MAIN',
+            files: ['injected_export_import.js'],
+        });
+    } catch (err) {
+        throw Error(`failed to execute script: ${err}`, { cause: err });
     }
 };

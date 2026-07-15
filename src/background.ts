@@ -1,10 +1,10 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { messageListener } from './lib/background.ts';
-import { action, NSPort } from './lib/runtime.ts';
+import { messageListener } from '#lib/background';
+import { action, namespace, NSPort } from '#lib/runtime';
 
 type PortMap = Map<number, NSPort>;
 
@@ -31,13 +31,13 @@ action.onClicked.addListener(async (tab, info?) => {
                 file: 'kahuna.js',
             });
         } catch (err) {
-            throw Error(`failed to execute script: ${err}`);
+            throw Error(`failed to execute script: ${err}`, { cause: err });
         }
         tabsReady.add(tabId);
     }
 });
 
-browser.tabs.onUpdated.addListener(
+namespace.tabs.onUpdated.addListener(
     (tabId, changeInfo) => {
         if (changeInfo?.status === 'complete') {
             tabsReady.delete(tabId);
@@ -46,7 +46,7 @@ browser.tabs.onUpdated.addListener(
     { properties: ['status'] },
 );
 
-browser.runtime.onConnect.addListener((port) => {
+namespace.runtime.onConnect.addListener((port) => {
     if (!port?.sender?.tab?.id) return;
     const tabId = port.sender.tab.id;
     if (port.name === 'main') {

@@ -1,59 +1,58 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
 import { type ImportOptions, importDB } from 'dexie-export-import';
 
-import configLayer from './configlayer.ts';
-import ImporterExporter from './importer-exporter.ts';
-import Origin from './origin.ts';
-import ImportConfig from './config/import-config.ts';
+import configLayer from '#components/configlayer';
+import ImporterExporter from '#components/importer-exporter';
+import Origin from '#components/origin';
+import ImportConfig from '#components/config/import-config';
 
-import appStore from '../lib/app-store.ts';
-import { type AppTarget, globalTarget, isTable } from '../lib/app-target.ts';
-import { getConnection } from '../lib/connection.ts';
-import CsvReader from '../lib/csvreader.ts';
-import { isPrimKeyNamed, isPrimKeyUnnamed } from '../lib/dexie-utils.ts';
-import messenger from '../lib/messenger.ts';
-import { capitalize, zipObject } from '../lib/utils.ts';
+import appStore from '#lib/app-store';
+import { globalTarget, isTable } from '#lib/app-target';
+import { getConnection } from '#lib/connection';
+import CsvReader from '#lib/csvreader';
+import { isPrimKeyNamed, isPrimKeyUnnamed } from '#lib/dexie-utils';
+import env from '#lib/environment';
+import messenger from '#lib/messenger';
+import { capitalize, zipObject } from '#lib/utils';
 import {
+    AppTarget,
     type EmptyAsValue,
-    type ImportFormat,
     type PlainObject,
     type KTable,
+    type Message,
+} from '#types';
+import {
     DATA_FORMATS,
-} from '../lib/types/common.ts';
+    ImportUsage,
+    ImportFormat,
+    ImportDexieOptions,
+    InjectedImportArgs,
+} from '#types/import-export';
 
-interface ImporterArgs {
-    usage: Usage;
+type ImporterArgs = {
+    usage: ImportUsage;
     target: AppTarget;
     dexieImportFilter?: ((table: string) => boolean) | undefined;
-}
-interface ImportDexieOptions {
-    clearTablesBeforeImport: boolean;
-    overwriteValues: boolean;
-    acceptNameDiff: boolean;
-    acceptVersionDiff: boolean;
-    acceptChangedPrimaryKey: boolean;
-    acceptMissingTables: boolean;
-    noTransaction: boolean;
-}
-interface ImportSettings extends ImportDexieOptions {
+};
+type ImportSettings = ImportDexieOptions & {
     dataImportFormat: ImportFormat;
     primaryKeyName: string;
     importDirectValues: boolean;
     directValuesName: string;
     importEmptyAs: EmptyAsValue;
-}
-interface ImporterState extends ImporterArgs, ImportSettings {
-    table: KTable | null;
-    importedCsvHeads: Map<string, string[]>;
-    defaults: ImportSettings;
-}
+};
+type ImporterState = ImporterArgs &
+    ImportSettings & {
+        table: KTable | null;
+        importedCsvHeads: Map<string, string[]>;
+        defaults: ImportSettings;
+    };
 
-type Usage = 'origin' | 'database' | 'table';
 type ImportFuncName = 'importDexie' | 'importJson' | 'importCsv';
 
 const state = Symbol('importer state');
@@ -61,8 +60,10 @@ const state = Symbol('importer state');
 const Importer = class {
     [state]: ImporterState = this.emptyState;
     #helper: InstanceType<typeof ImporterExporter>;
+    #boundInjectedDexieImportReady;
     constructor() {
-        this.#helper = new ImporterExporter();
+        this.#helper = new ImporterExporter('import');
+        this.#boundInjectedDexieImportReady = this.injectedDexieImportReady.bind(this);
     }
     async init(args: ImporterArgs) {
         this[state] = await this.initialState(args);
@@ -84,7 +85,7 @@ const Importer = class {
     get emptyState(): ImporterState {
         const defaultSettings = ImportConfig.defaultSettings() as ImportSettings;
         return Object.assign(defaultSettings, {
-            usage: 'origin' as Usage,
+            usage: 'origin' as ImportUsage,
             target: globalTarget,
             dexieImportFilter: undefined,
             table: null,
@@ -124,6 +125,7 @@ const Importer = class {
         return this[state] ? this[state].importedCsvHeads : new Map();
     }
     async import() {
+        let finished = false;
         try {
             const format = this[state].dataImportFormat;
             if (!this.formats.includes(format)) {
@@ -139,12 +141,15 @@ const Importer = class {
                     loadingStop: null,
                 });
                 const importFunction = `import${capitalize(format)}` as ImportFuncName;
-                await this[importFunction](file);
+                finished = await this[importFunction](file);
             }
         } catch (error) {
             this.#helper.handleError(error as Error);
+            finished = true;
         } finally {
-            this.importReady();
+            if (finished) {
+                this.importReady();
+            }
         }
     }
     getImportFile(): File | null {
@@ -159,9 +164,8 @@ const Importer = class {
         const isOrigin = this[state].usage === 'origin';
         if (isOrigin) {
             messenger.post({ type: 'changedDatabases' });
-        }
-        else if (isTable(appStore.target())) {
-            messenger.post({ type: 'refreshDatatable' });          
+        } else if (isTable(appStore.target())) {
+            messenger.post({ type: 'refreshDatatable' });
         }
         const tables = isOrigin ? [] : appStore.state.tables;
         const options = isOrigin ? {} : { loadTables: true };
@@ -187,17 +191,47 @@ const Importer = class {
         }
         if (err) throw Error(`invalid import file: ${err}`);
     }
-    async importDexie(file: File): Promise<void> {
-        const options: ImportOptions = { filter: this[state].dexieImportFilter };
+    async importDexie(file: File): Promise<boolean> {
+        const filter = this[state].dexieImportFilter;
+        const options: ImportOptions = filter ? { filter } : {};
         for (const opt of this.dexieOptions) {
             const value = this[state][opt as keyof ImportDexieOptions];
             options[opt as keyof ImportDexieOptions] = value;
+        }
+        if (env.isFirefox) {
+            await this.injectedDexieImport(file, options);
+            return false;
         }
         if (this[state].usage === 'origin') {
             await importDB(file, options);
         } else if (['database', 'table'].includes(this[state].usage)) {
             const dbHandle = await getConnection(this[state].target.database);
             await dbHandle.import(file, options);
+        }
+        return true;
+    }
+    async injectedDexieImport(file: File, options: ImportOptions) {
+        await this.#helper.ensureInjectedExportImport();
+        const { target, usage } = this[state];
+        delete options.filter;
+        const args: InjectedImportArgs = {
+            database: target.database,
+            table: target.table,
+            fileUrl: URL.createObjectURL(file),
+            usage,
+            options,
+        };
+        messenger.register('injectedImportResult', this.#boundInjectedDexieImportReady);
+        messenger.post({ type: 'injectedImport', args });
+    }
+    injectedDexieImportReady(msg: Message) {
+        if (msg.type !== 'injectedImportResult') return;
+        messenger.unregister('injectedExportResult', this.#boundInjectedDexieImportReady);
+        configLayer.close({ rerenderApp: false });
+        if (msg.error) {
+            this.#helper.handleError(msg.error);
+        } else {
+            this.importReady();
         }
     }
     dexieOptions = [
@@ -209,44 +243,27 @@ const Importer = class {
         'noTransaction',
         'overwriteValues',
     ] as const;
-    async importJson(file: File): Promise<void> {
+
+    async importJson(file: File): Promise<boolean> {
         if (this[state].usage !== 'table') {
             throw Error(
                 `json format is not supported for import into ${this[state].usage}`,
             );
         }
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                try {
-                    const { database: dbname, table: tablename } = this[state].target;
-                    const result = event.target?.result;
-                    if (typeof result !== 'string') {
-                        throw Error(`error reading file ${file.name}`);
-                    }
-                    const data = JSON.parse(result);
-                    const keys = this.keyValues(data);
-                    const dataObjects = this.dataObjectsFromJson(data);
-                    const dbHandle = await getConnection(dbname);
-                    if (this[state].clearTablesBeforeImport) {
-                        await dbHandle.table(tablename).clear();
-                    }
-                    const addFunc = this[state].overwriteValues ? 'bulkPut' : 'bulkAdd';
-                    await dbHandle.table(tablename)[addFunc](dataObjects, keys);
-                    resolve();
-                } catch (error) {
-                    this.#helper.handleError(error as Error);
-                    reject();
-                }
-            };
-            reader.onerror = () => {
-                this.#helper.handleError(Error(`error reading file ${file.name}`));
-                reject();
-            };
-            reader.readAsText(file);
-        });
+        const { database: dbname, table: tablename } = this[state].target;
+        const jsonString = await file.text();
+        const data = JSON.parse(jsonString);
+        const keys = this.keyValues(data);
+        const dataObjects = this.dataObjectsFromJson(data);
+        const dbHandle = await getConnection(dbname);
+        if (this[state].clearTablesBeforeImport) {
+            await dbHandle.table(tablename).clear();
+        }
+        const addFunc = this[state].overwriteValues ? 'bulkPut' : 'bulkAdd';
+        await dbHandle.table(tablename)[addFunc](dataObjects, keys);
+        return true;
     }
-    async importCsv(file: File): Promise<void> {
+    async importCsv(file: File): Promise<boolean> {
         const {
             table,
             usage,
@@ -257,7 +274,7 @@ const Importer = class {
             target: { database: dbname, table: tablename },
         } = this[state];
         if (!table) {
-            return;
+            return true;
         }
         if (usage !== 'table') {
             throw Error(`csv format is not supported for import into ${usage}`);
@@ -291,6 +308,7 @@ const Importer = class {
         const addFunc = overwriteValues ? 'bulkPut' : 'bulkAdd';
         dbHandle.table(tablename)[addFunc](dataObjects, keys);
         this[state].importedCsvHeads.set(tablename, heads);
+        return true;
     }
     keyValuesNeeded(): boolean {
         return this[state].table &&
@@ -318,6 +336,7 @@ const Importer = class {
         return;
     }
     keyValuesFromCsv(data: PlainObject[], heads: string[]): number[] | string[] {
+        // TODO: fix type, data: CsvValueType[][]
         const kidx = heads.indexOf(this[state].primaryKeyName);
         return this[state].table
             ? this[state].table.primKey.auto
@@ -501,7 +520,7 @@ const Importer = class {
         return this.formats.includes(value as ImportFormat);
     }
     clickFileInput(event: Event) {
-        const target = event.target as HTMLInputElement;
+        const target = event.target as HTMLElement;
         const input = target.closest('button')?.querySelector('input');
         if (input) input.click();
     }

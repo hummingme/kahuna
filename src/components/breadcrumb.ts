@@ -1,21 +1,23 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
-import appWindow from './app-window.ts';
-import mainMenu from './main-menu.ts';
-import Origin from './origin.ts';
-import Database from './database.ts';
-import datatable from './datatable.ts';
-import { symbolButton } from '../lib/button.ts';
-import svgIcon from '../lib/svgicon.ts';
-import { KDatabase } from '../lib/types/common.ts';
+
+import appWindow from '#components/app-window';
+import mainMenu from '#components/main-menu';
+import Origin from '#components/origin';
+import Database from '#components/database';
+import datatable from '#components/datatable';
+import { symbolButton } from '#lib/button';
+import { escapeUnicode } from '#lib/escape-unicode';
+import svgIcon from '#lib/svgicon';
+import { KDatabase } from '#types';
 
 interface BreadcrumbArgs {
-    selectedDB?: number;
-    selectedTable?: number;
+    selectedDB?: number | undefined;
+    selectedTable?: number | undefined;
     databases: KDatabase[];
 }
 
@@ -42,25 +44,25 @@ const view = (args: BreadcrumbArgs): TemplateResult => {
         <a title=${title} @click=${Origin.summon}>origin: ${origin}</a>
     `);
     if (typeof selectedDB === 'number') {
-        const database = databases[selectedDB].name;
+        const databaseName = escapeUnicode(databases[selectedDB].name);
         const title = `${selectedTable === undefined ? 're' : ''}load list of tables`;
         items.push(
             separator,
             html`
                 <a title=${title} @click=${Database.summon.bind(null, selectedDB)}>
-                    database: ${database}
+                    database: ${databaseName}
                 </a>
             `,
         );
     }
     if (typeof selectedTable === 'number' && datatable.table) {
-        const table = datatable.table.name;
+        const tableName = escapeUnicode(datatable.table.name);
         const title = 'reload table';
         items.push(
             separator,
             html`
                 <a title=${title} @click=${() => datatable.summon(selectedTable)}>
-                    table: ${table}
+                    table: ${tableName}
                 </a>
             `,
         );

@@ -1,16 +1,18 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html, render, TemplateResult } from 'lit-html';
+import { html, render, type TemplateResult } from 'lit-html';
 import { ref } from 'lit/directives/ref.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import appWindow from './app-window.ts';
-import Layer from './layer.ts';
-import { button } from '../lib/button.ts';
-import { type Position, EMPTY_POSITION } from '../lib/types/common.ts';
-import appStore from '../lib/app-store.ts';
+
+import appWindow from '#components/app-window';
+import Layer from '#components/layer';
+import appStore from '#lib/app-store';
+import { button } from '#lib/button';
+import Draggable from '#lib/draggable';
+import { type Position, EMPTY_POSITION } from '#types';
 
 interface ConfigLayerState {
     node?: HTMLElement;
@@ -25,7 +27,7 @@ interface ConfigLayerState {
     topic: string | null;
 }
 interface ShowProps extends Partial<ConfigLayerState> {
-    anchorId: string;
+    anchorId?: string;
     buttons?: LayerButton[];
 }
 
@@ -51,14 +53,14 @@ class ConfigLayer {
     constructor() {
         this[state] = this.#initState;
         this[stack] = [];
-        this.#layer = new Layer({
+        const DraggableLayer = Draggable(Layer);
+        this.#layer = new DraggableLayer({
             closeHandler: this.close.bind(this),
             resizeHandler: this.fixPosition.bind(this),
         });
     }
     get #initState(): ConfigLayerState {
         return {
-            node: undefined,
             visible: false,
             view: null,
             anchorPosition: EMPTY_POSITION,
@@ -84,26 +86,33 @@ class ConfigLayer {
         if (this[state].visible) {
             this[stack].push(this[state]);
         }
-        const { anchorId, buttons = [], ...otherProps } = props;
-        const layer = this.#layer;
-        const anchorNode = appWindow.win.querySelector(`#${anchorId}`);
-        const anchorPosition = anchorNode
-            ? layer.anchorPosition(anchorNode)
-            : EMPTY_POSITION;
+        const { buttons = [], ...otherProps } = props;
+        const anchorPosition = this.anchorPosition(props);
         this[state] = {
             ...this.#initState,
             visible: true,
             anchorPosition,
             buttons: this.layerButtons(buttons),
-            position: layer.calculatePosition(anchorPosition),
+            position: this.#layer.calculatePosition(anchorPosition),
             ...otherProps,
         };
         appWindow.removeInputHandler();
         appWindow.showOverlay();
-        layer.addEscLayerHandler();
-        layer.addClickWindowHandler(appWindow.win);
-        layer.addResizeHandler();
+        this.#layer.addEscLayerHandler();
+        this.#layer.addClickWindowHandler(appWindow.win);
+        this.#layer.addResizeHandler();
         appStore.rerender();
+    }
+    anchorPosition(props: ShowProps) {
+        const { anchorId, anchorPosition: anchorPos } = props;
+        const anchorNode = anchorId
+            ? appWindow.win.querySelector(`#${anchorId}`)
+            : undefined;
+        return anchorPos
+            ? anchorPos
+            : anchorNode
+              ? this.#layer.anchorPosition(anchorNode)
+              : EMPTY_POSITION;
     }
     layerButtons(buttons: LayerButton[]): LayerButton[] {
         return buttons && buttons.some((button) => button.isClose)
@@ -112,6 +121,7 @@ class ConfigLayer {
     }
     fixPosition(): void {
         if (this[state].node === undefined) return;
+        if (this.#layer.wasDragged) return;
         const position = this.#layer.calculatePosition(
             this[state].anchorPosition,
             this.getNode(),
@@ -141,6 +151,7 @@ class ConfigLayer {
                 appStore.rerender();
             }
         }
+        this.#layer.resetDraggable();
     }
     onTopicClicked = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
@@ -151,6 +162,9 @@ class ConfigLayer {
         this.update({ topic: topic === configLayer[state].topic ? null : topic });
     }
     node() {
+        if (this.#layer.wasDragged) {
+            this[state].position = this.#layer.getPosition();
+        }
         const top = `${this[state].position.y}px`;
         const left = `${this[state].position.x}px`;
         const maxHeight = `${window.innerHeight - 17}px`;
@@ -166,9 +180,14 @@ class ConfigLayer {
             : '';
     }
     nodeReady(node?: Element) {
-        if (node) {
-            this[state].node = node as HTMLElement;
+        if (node instanceof HTMLElement) {
+            this[state].node = node;
             this.render();
+        }
+    }
+    makeDraggable() {
+        if (this[state].node) {
+            this.#layer.makeDraggable(this[state].node);
         }
     }
     render() {
@@ -182,13 +201,15 @@ class ConfigLayer {
             return '';
         }
         const { buttons, view } = this[state];
-        const buttonResults = [];
-        for (const { label, handler, isClose } of buttons) {
+        const buttonResults: TemplateResult[] = [];
+        for (const { label, handler, isClose, ...attributes } of buttons) {
             const clickHandler = () => {
                 if (isClose) this.close.bind(this)();
                 else if (handler) handler();
             };
-            buttonResults.push(button({ content: label, '@click': clickHandler }));
+            buttonResults.push(
+                button({ content: label, '@click': clickHandler, ...attributes }),
+            );
         }
         return html`
             <div id="config-stage">${view && view()}</div>

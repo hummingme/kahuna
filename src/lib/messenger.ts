@@ -1,19 +1,13 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { postToBackground } from './post-background.ts';
-import {
-    isGroupMessage,
-    isTopicInGroup,
-    type Message,
-    type MessageTopic,
-} from './types/messages.ts';
+import { isGroupMessage, isTopicInGroup } from '#lib/message-utils';
+import { postToBackground } from '#lib/post-background';
+import { Message, MessageTopic } from '#types';
 
-interface Handler {
-    (message: Message): void | Promise<void>;
-}
+type Handler = { (message: Message): void | Promise<void> };
 
 const Messenger = class {
     #worker: Worker | null = null;

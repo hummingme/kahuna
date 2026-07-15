@@ -1,10 +1,11 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html } from 'lit-html';
-import Config from './config.ts';
+
+import Config from '#components/config/config';
 import type {
     ControlInstance,
     ImportOptions,
@@ -12,20 +13,18 @@ import type {
     Option,
     OptionName,
     SelectOption,
-} from './types.ts';
-import type { AppTarget } from '../../lib/app-target.ts';
-import infoIcon from '../../lib/info-icon.ts';
-import settings from '../../lib/settings.ts';
-import { selfMap } from '../../lib/utils.ts';
-import { DATA_FORMATS, EMPTY_AS } from '../../lib/types/common.ts';
-import type { SettingSubject } from '../../lib/types/settings.ts';
+} from '#components/config/types';
+import infoIcon from '#lib/info-icon';
+import settings from '#lib/settings';
+import { selfMap } from '#lib/utils';
+import { AppTarget, DATA_FORMATS, EMPTY_AS, SettingSubject } from '#types';
 
 type ImportConfigState = {
     defaults: ImportOptions;
     subject: SettingSubject;
 } & ImportOptions;
 
-const ImportConfig = class extends Config {
+export default class ImportConfig extends Config {
     constructor({
         control,
         values,
@@ -118,25 +117,21 @@ JSON import into tables with unnamed primary key.`;
         return infoIcon(info);
     }
     static async getSettings(target: AppTarget) {
-        const defaults = await ImportConfig.getDefaults(target);
-        let values = (await settings.get({
+        const defaults = await ImportConfig.getImportDefaults(target);
+        let values = await settings.get({
             ...target,
             subject: 'import',
-        })) as ImportOptions;
-        values = settings.cleanupSettings(values, defaults) as ImportOptions;
+        });
+        values = settings.cleanupSettings(values, defaults);
         return { values, defaults };
     }
-    static async getDefaults(target: AppTarget): Promise<ImportOptions> {
-        return (await Config.getDefaults(
-            target,
-            'import',
-            ImportConfig.defaultSettings(),
-        )) as ImportOptions;
+    static async getImportDefaults(target: AppTarget): Promise<ImportOptions> {
+        return await Config.getDefaults(target, 'import', ImportConfig.defaultSettings());
     }
     static defaultSettings(): ImportOptions {
         return importDefaultOptions();
     }
-};
+}
 
 export const importDefaultOptions = () => {
     return {
@@ -154,5 +149,3 @@ export const importDefaultOptions = () => {
         noTransaction: false, // database & table, for dexie
     };
 };
-
-export default ImportConfig;

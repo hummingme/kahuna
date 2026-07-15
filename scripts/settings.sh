@@ -30,7 +30,7 @@ ESBUILD_PARAMS=(
 if [ "$2" = "release" ]; then
     ESBUILD_PARAMS+=("--minify")
 else
-    ESBUILD_PARAMS+=("--sourcemap=both")    
+    ESBUILD_PARAMS+=("--sourcemap=linked")
 fi;
 
 WEBEXT_OPTIONS=(

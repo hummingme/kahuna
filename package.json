@@ -1,6 +1,6 @@
 {
     "name": "kahuna",
-    "version": "1.5.2",
+    "version": "1.6",
     "description": "Browser-extension to view, edit, manage, export and import IndexedDB databases.",
     "author": "Lutz Brückner <dev@kahuna.rocks>",
     "license": "MPL-2.0",
@@ -23,6 +23,7 @@
         "release": "scripts/release.sh",
         "dev:firefox": "scripts/develop.sh firefox",
         "dev:chromium": "scripts/develop.sh chromium",
+        "test": "vitest",
         "lint": "eslint 'src/**/*.ts'",
         "check": "npx tsc --noEmit"
     },
@@ -35,18 +36,23 @@
         "lit-html": "^3.3"
     },
     "devDependencies": {
-        "@eslint/js": "^9.31",
-        "@types/chrome": "^0.1",
+        "@eslint/js": "^10.0.1",
+        "@types/chrome": "^0.2",
         "@types/firefox-webext-browser": "^143",
-        "esbuild": "^0.27",
-        "eslint": "^9.31",
+        "@types/webextension-polyfill": "^0.12.5",
+        "@types/wicg-file-system-access": "^2023.10.7",
+        "dpdm": "^4.0.1",
+        "esbuild": "^0.28",
+        "eslint": "^10.0.1",
         "eslint-config-prettier": "^10.1",
         "globals": "^17",
         "http-server": "github:http-party/http-server",
+        "jsdom": "^29.0.1",
         "onchange": "^7.1",
-        "prettier": "3.4.2",
-        "typescript": "^5.8",
-        "typescript-eslint": "^8.37",
-        "web-ext": "^9"
+        "prettier": "3.8.3",
+        "typescript": "^6.0",
+        "typescript-eslint": "^8.56.0",
+        "vitest": "^4.1.2",
+        "web-ext": "^10.0"
     }
 }

@@ -1,10 +1,10 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import messenger from '../lib/messenger.ts';
-import { startWorker } from './worker.ts';
+import messenger from '#lib/messenger';
+import { startWorker } from '#lib/worker';
 
 const SCRIPTNAME = 'contentscript_worker.js';
 

@@ -1,37 +1,41 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, render, TemplateResult } from 'lit-html';
 import { nothing } from 'lit-html';
 import { ref } from 'lit/directives/ref.js';
-import ApplicationConfig from './application-config.ts';
-import BehaviorConfig from './behavior-config.ts';
-import ColumnsConfig from './columns-config.ts';
-import ExportConfig from './export-config.ts';
-import FiltersConfig from './filters-config.ts';
-import ImportConfig from './import-config.ts';
-import type { ConfigActor, ConfigRealm, RealmOptions } from './types.ts';
-import configLayer from '../configlayer.ts';
-import messenger from '../../lib/messenger.ts';
-import tooltip from '../tooltip.ts';
-import appStore from '../../lib/app-store.ts';
-import {
-    type AppTarget,
-    globalTarget,
-    isGlobal,
-    isDatabase,
-    isTable,
-} from '../../lib/app-target.ts';
-import svgIcon from '../../lib/svgicon.ts';
-import { hasIntersection } from '../../lib/utils.ts';
+
+import ApplicationConfig from './application-config';
+import BehaviorConfig from './behavior-config';
+import ColumnsConfig from './columns-config';
+import ExportConfig from './export-config';
+import FiltersConfig from './filters-config';
+import ImportConfig from './import-config';
+import type { AllOptions, ConfigRealm } from './types';
+import configLayer from '#components/configlayer';
+import tooltip from '#components/tooltip';
+import appStore from '#lib/app-store';
+import messenger from '#lib/messenger';
+import { globalTarget, isGlobal, isDatabase, isTable } from '#lib/app-target';
+import svgIcon from '#lib/svgicon';
+import { hasIntersection } from '#lib/utils';
+import { AppTarget } from '#types';
+
+export type ConfigActor =
+    | ApplicationConfig
+    | BehaviorConfig
+    | ColumnsConfig
+    | FiltersConfig
+    | ExportConfig
+    | ImportConfig;
 
 interface ConfigControlState {
     target: AppTarget;
     realm: ConfigRealm;
-    actor: ConfigActor;
-    remembered: Map<string, RealmOptions>;
+    actor?: ConfigActor;
+    remembered: Map<string, Partial<AllOptions>>;
     hasChanged: Set<ConfigRealm>;
 }
 type ConfigLevel = 'global' | 'database' | 'table';
@@ -45,7 +49,6 @@ export const ConfigControl = class {
         this[state] = {
             target: globalTarget,
             realm: 'application',
-            actor: {} as ConfigActor,
             remembered: new Map(),
             hasChanged: new Set(),
         };
@@ -60,13 +63,14 @@ export const ConfigControl = class {
         anchorId: string;
     }) {
         this[state] = { ...this[state], target, realm };
-        this[state].actor = (await this.activateActor(realm)) as ConfigActor;
+        this[state].actor = await this.activateActor(realm);
         configLayer.show({
             view: this.node.bind(this),
             buttons: this.layerButtons(),
             anchorId,
             keepMinimumTop: true,
         });
+        configLayer.makeDraggable();
         this.adjustLayerButtons();
     }
     get isGlobal() {
@@ -93,25 +97,26 @@ export const ConfigControl = class {
     get actor() {
         return this[state].actor;
     }
-    remember(settings: RealmOptions) {
+    remember(settings: Partial<AllOptions>) {
         if (!this.remembered.has(this.realmKey)) {
-            this.remembered.set(this.realmKey, settings);
+            this.remembered.set(this.realmKey, structuredClone(settings));
         }
     }
     get remembered() {
         return this[state].remembered;
     }
-    get rememberedSettings() {
+    get rememberedSettings(): Partial<AllOptions> | undefined {
         return this.remembered.get(this.realmKey);
     }
     get realms() {
         const realms = CONFIG_REALMS;
         return this.isGlobal ? realms : realms.toSpliced(0, 1);
     }
-    async activateActor(realm: ConfigRealm) {
-        if (this.actors[realm]) {
-            return await this.actors[realm].activate(this);
+    async activateActor(realm: ConfigRealm): Promise<ConfigActor> {
+        if (!this.actors[realm]) {
+            throw `unsupported config realm ${realm}!`;
         }
+        return await this.actors[realm].activate(this);
     }
     actors = {
         application: ApplicationConfig,
@@ -143,29 +148,31 @@ export const ConfigControl = class {
     }
     layerButtonNodes() {
         const layerNode = configLayer.getNode();
-        return (
-            layerNode
-                ? Array.from(layerNode.querySelectorAll('div.button-wrapper button'))
-                : []
-        ) as HTMLButtonElement[];
+        return layerNode
+            ? Array.from(
+                  layerNode.querySelectorAll<HTMLButtonElement>(
+                      'div.button-wrapper button',
+                  ),
+              )
+            : [];
     }
     adjustLayerButtons() {
         const buttons = this.layerButtonNodes();
         const noActor = !this[state].actor;
         if (buttons.length === 3) {
-            buttons[0].disabled = noActor || this[state].actor.isDefault() === true;
-            buttons[1].disabled = noActor || this[state].actor.isChanged() === false;
+            buttons[0].disabled = noActor || this[state].actor!.isDefault() === true;
+            buttons[1].disabled = noActor || this[state].actor!.isChanged() === false;
         }
     }
     setDefaultsHandler() {
-        this[state].actor.setDefaults();
+        this[state].actor?.setDefaults();
     }
     undoChangesHandler() {
-        this[state].actor.undoChanges();
+        this[state].actor?.undoChanges();
     }
     closeHandler() {
         this.layerButtonNodes().map((button) => (button.disabled = false));
-        if (this[state].actor.isChanged()) {
+        if (this[state].actor?.isChanged()) {
             this[state].hasChanged.add(this.realm);
         }
         if (this.isChanged('application') && isGlobal(this.appTarget)) {
@@ -235,6 +242,7 @@ export const ConfigControl = class {
                 ? ''
                 : svgIcon('tabler-square-rounded-chevron-down', {
                       '@mouseover': this.switchMouseOver.bind(this),
+                      class: 'switch-target',
                   });
         let headline: TemplateResult;
         if (realm === 'application') {
@@ -264,18 +272,20 @@ export const ConfigControl = class {
         `;
     }
     realmView() {
-        const realmView = this[state].actor.view.bind(this[state].actor);
-        return html`<form id=config-form>${realmView()}</form)`;
+        if (this[state].actor) {
+            const realmView = this[state].actor.view.bind(this[state].actor);
+            return html`<form id=config-form>${realmView()}</form)`;
+        }
     }
     async realmTabClicked(event: Event) {
         const target = event.target as HTMLElement;
         const realm = target.closest('li')?.dataset.realm as ConfigRealm;
         if (CONFIG_REALMS.includes(realm)) {
-            if (this[state].actor && this[state].actor.isChanged()) {
+            if (this[state].actor?.isChanged()) {
                 this[state].hasChanged.add(this.realm);
             }
             this[state].realm = realm;
-            this[state].actor = (await this.activateActor(realm)) as ConfigActor;
+            this[state].actor = await this.activateActor(realm);
             this.render();
         }
     }
@@ -331,7 +341,7 @@ export const ConfigControl = class {
             }
         }
         this[state].target = target;
-        this[state].actor = (await this.activateActor(this[state].realm)) as ConfigActor;
+        this[state].actor = await this.activateActor(this[state].realm);
         tooltip.close();
         this.render();
     }

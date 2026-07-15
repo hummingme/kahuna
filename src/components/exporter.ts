@@ -1,74 +1,75 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, TemplateResult } from 'lit-html';
 import type { Collection, Dexie, Table } from 'dexie';
 import { exportDB, type ExportOptions } from 'dexie-export-import';
 
-import configLayer from './configlayer.ts';
-import Database from './database.ts';
-import datatable from './datatable.ts';
-import ImporterExporter from './importer-exporter.ts';
-import ExportConfig from './config/export-config.ts';
-
-import appStore from '../lib/app-store.ts';
-import { type AppTarget, globalTarget } from '../lib/app-target.ts';
-import { getConnection } from '../lib/connection.ts';
-import { isPlainObject } from '../lib/datatypes.ts';
-import {
-    getCollection,
-    isPrimKeyNamed,
-    leadingUnnamedPkValues,
-} from '../lib/dexie-utils.ts';
-import messenger from '../lib/messenger.ts';
-import textinput from '../lib/textinput.ts';
-import { capitalize, downloadFile } from '../lib/utils.ts';
+import configLayer from '#components/configlayer';
+import Database from '#components/database';
+import datatable from '#components/datatable';
+import ImporterExporter from '#components/importer-exporter';
+import ExportConfig from '#components/config/export-config';
+import appStore from '#lib/app-store';
+import { globalTarget } from '#lib/app-target';
+import { getConnection } from '#lib/connection';
+import { isPlainObject } from '#lib/datatypes';
+import { getCollection, isPrimKeyNamed, leadingUnnamedPkValues } from '#lib/dexie-utils';
+import env from '#lib/environment';
+import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import messenger from '#lib/messenger';
+import textinput from '#lib/textinput';
+import { capitalize, downloadFile } from '#lib/utils';
+import { AppTarget, KTable, Message, UnknownRecord } from '#types';
 import {
     DATA_FORMATS,
-    type ExportFormat,
-    type KTable,
-    type PlainObject,
-} from '../lib/types/common.ts';
+    InjectedExportArgs,
+    ExportFormat,
+    ExportUsage,
+} from '#types/import-export';
 
-interface ExporterArgs {
-    usage: Usage;
+type ExporterArgs = {
+    usage: ExportUsage;
     target: AppTarget;
-    dexieExportFilter?: (table: string, values: unknown, key: unknown) => boolean;
-}
-interface ExportSettings extends FilenameTemplateSettings {
+    dexieExportFilter?:
+        | ((table: string, values: unknown, key: unknown) => boolean)
+        | undefined;
+};
+type ExportSettings = FilenameTemplateSettings & {
     dataExportFormat: ExportFormat;
     primaryKeyName: string;
     directValuesName: string;
     prettyDexie: boolean;
     prettyJSON: boolean;
-}
-interface FilenameTemplateSettings {
+};
+type FilenameTemplateSettings = {
     filenameDatabase: string;
     filenameTable: string;
     filenameSelection: string;
-}
-interface ExporterState extends ExporterArgs, ExportSettings {
-    filename: string;
-    table?: KTable;
-    tables?: KTable[];
-    defaults: ExportSettings;
-}
-interface Replacer {
+};
+type ExporterState = ExporterArgs &
+    ExportSettings & {
+        filename: string;
+        table: KTable | undefined;
+        tables: KTable[] | undefined;
+        defaults: ExportSettings;
+    };
+type Replacer = {
     key: string;
     func: (target: AppTarget, settings: ExportSettings) => string;
-}
-
-type Usage = 'database' | 'table' | 'selection';
+};
 
 const state = Symbol('exporter state');
 
 export const Exporter = class {
     [state]: ExporterState = this.emptyState;
     #helper: InstanceType<typeof ImporterExporter>;
+    #boundInjectedDexieExportReady;
     constructor() {
-        this.#helper = new ImporterExporter();
+        this.#helper = new ImporterExporter('export');
+        this.#boundInjectedDexieExportReady = this.injectedDexieExportReady.bind(this);
     }
     async init(args: ExporterArgs) {
         this[state] = await this.initialState(args);
@@ -96,10 +97,12 @@ export const Exporter = class {
     get emptyState(): ExporterState {
         const defaultSettings = ExportConfig.defaultSettings() as ExportSettings;
         return Object.assign(defaultSettings, {
-            usage: 'database' as Usage,
+            usage: 'database' as ExportUsage,
             target: globalTarget,
             dexieExportFilter: undefined,
             filename: '',
+            table: undefined,
+            tables: undefined,
             dataExportFormat: 'json' as ExportFormat,
             defaults: defaultSettings,
         });
@@ -148,11 +151,17 @@ export const Exporter = class {
             let content;
             const dbHandle = await getConnection(this[state].target.database);
             if (format === 'dexie') {
-                const options: ExportOptions = {
-                    filter: this[state].dexieExportFilter,
-                    prettyJson: this[state].prettyDexie,
-                };
-                content = await exportDB(dbHandle, options);
+                if (env.isFirefox) {
+                    await this.injectedDexieExport();
+                    return;
+                } else {
+                    const filter = this[state].dexieExportFilter;
+                    const options: ExportOptions = {
+                        ...(filter && { filter }),
+                        prettyJson: this[state].prettyDexie,
+                    };
+                    content = await exportDB(dbHandle, options);
+                }
             } else {
                 const data =
                     this[state].usage === 'selection'
@@ -194,7 +203,10 @@ export const Exporter = class {
         const dexieTable = dbHandle.table(table);
         return await this.collectionToData(collection, dexieTable as Table);
     }
-    async collectionToData(collection: Collection, table: Table): Promise<PlainObject[]> {
+    async collectionToData(
+        collection: Collection,
+        table: Table,
+    ): Promise<UnknownRecord[]> {
         const { primaryKeyName, directValuesName } = this[state];
         let data = [];
         if (isPrimKeyNamed(table.schema.primKey)) {
@@ -230,7 +242,7 @@ export const Exporter = class {
         }
         return data;
     }
-    doCsv(data: PlainObject[]): string {
+    doCsv(data: UnknownRecord[]): string {
         const lines = [];
         const heads = this.collectCsvHeads(data);
         lines.push(heads.map(this.escapeCsv, this).join(','));
@@ -244,7 +256,7 @@ export const Exporter = class {
         }
         return lines.join('\n');
     }
-    collectCsvHeads(data: PlainObject[]): string[] {
+    collectCsvHeads(data: UnknownRecord[]): string[] {
         const heads: Set<string> = new Set();
         for (const row of data) {
             for (const head of Object.keys(row)) {
@@ -260,15 +272,44 @@ export const Exporter = class {
         }
         return value;
     }
+    async injectedDexieExport() {
+        await this.#helper.ensureInjectedExportImport();
+        const { target, filename, usage, prettyDexie } = this[state];
+        let args: InjectedExportArgs = {
+            ...target,
+            filename,
+            usage,
+            prettyJson: prettyDexie,
+        };
+        if (usage === 'selection') {
+            const { selectorFields, selected } = datatable.state;
+            args = { ...args, selectorFields, selected };
+        }
+        messenger.register('injectedExportResult', this.#boundInjectedDexieExportReady);
+        messenger.post({ type: 'injectedExport', args });
+    }
+    injectedDexieExportReady(msg: Message) {
+        if (msg.type !== 'injectedExportResult') return;
+        messenger.unregister('injectedExportResult', this.#boundInjectedDexieExportReady);
+        configLayer.close({ rerenderApp: false });
+        if (msg.error) {
+            this.#helper.handleError(msg.error!);
+        } else {
+            appStore.rerender({ loading: false });
+        }
+    }
     csvQuoteRegExp = /[\f\n\r\t\v",]/;
     parseFilename({
         usage,
         target,
         ...settings
     }: {
-        usage: Usage;
+        usage: ExportUsage;
         target: AppTarget;
-    } & Omit<ExporterState, 'usage' | 'target' | 'defaults'>): string {
+    } & Omit<
+        ExporterState,
+        'usage' | 'target' | 'defaults' | 'table' | 'tables'
+    >): string {
         const replacers = this.filenameReplacers(usage);
         const settingName = this.filenameTemplateSettingName(usage);
         let filename = settings[settingName];
@@ -280,7 +321,7 @@ export const Exporter = class {
         }
         return filename;
     }
-    filenameReplacers(usage: Usage): Replacer[] {
+    filenameReplacers(usage: ExportUsage): Replacer[] {
         const now = new Date();
         const hours = ('' + now.getHours()).padStart(2, '0');
         const minutes = ('' + now.getMinutes()).padStart(2, '0');
@@ -321,7 +362,7 @@ export const Exporter = class {
                     ${textinput({
                         name: 'export-filename',
                         size: 20,
-                        '.value': this[state].filename,
+                        '.value': escapeUnicode(this[state].filename),
                         '@change': this.changeExportFilename.bind(this),
                         '@focus': this.focusExportFilename.bind(this),
                         '@focusout': this.focusoutExportFilename.bind(this),
@@ -393,7 +434,9 @@ export const Exporter = class {
     changeExportFilename(event: Event) {
         const target = event.target as HTMLInputElement;
         this.update({
-            [`filename${capitalize(this[state].usage)}`]: target.value.trim(),
+            [`filename${capitalize(this[state].usage)}`]: unescapeUnicode(
+                target.value.trim(),
+            ),
         });
         this.update({ filename: this.parseFilename(this[state]) });
         this.#helper.updateSettings('export', this[state]);
@@ -408,7 +451,7 @@ export const Exporter = class {
         const target = event.target as HTMLInputElement;
         target.value = this[state].filename;
     }
-    filenameTemplateSettingName(usage: Usage): keyof FilenameTemplateSettings {
+    filenameTemplateSettingName(usage: ExportUsage): keyof FilenameTemplateSettings {
         return `filename${capitalize(usage)}` as keyof FilenameTemplateSettings;
     }
 };

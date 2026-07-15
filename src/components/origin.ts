@@ -1,23 +1,26 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
 import { map } from 'lit/directives/map.js';
 import { Dexie } from 'dexie';
-import Database from './database.ts';
-import databaseTools from './database-tools.ts';
-import datatable from './datatable.ts';
-import OriginTools from './origin-tools.ts';
-import configLayer from './configlayer.ts';
-import displayConfigControl from './config/config-control.ts';
-import appStore from '../lib/app-store.ts';
-import { symbolButton } from '../lib/button.ts';
-import { getConnection } from '../lib/connection.ts';
-import messenger from '../lib/messenger.ts';
-import settings from '../lib/settings.ts';
-import type { KDatabase } from '../lib/types/common.ts';
+
+import Database from '#components/database';
+import databaseTools from '#components/database-tools';
+import datatable from '#components/datatable';
+import OriginTools from '#components/origin-tools';
+import configLayer from '#components/configlayer';
+import displayConfigControl from '#components/config/config-control';
+import appStore from '#lib/app-store';
+import { symbolButton } from '#lib/button';
+import { getConnection } from '#lib/connection';
+import { escapeUnicode } from '#lib/escape-unicode';
+import messenger from '#lib/messenger';
+import settings from '#lib/settings';
+import { rowIndex } from '#lib/utils';
+import type { KDatabase } from '#types';
 
 const summon = async () => {
     if (typeof appStore.state.selectedTable === 'number') {
@@ -100,10 +103,11 @@ const template = (databases: KDatabase[]): TemplateResult => {
                           databases,
                           (db, idx) => html`
                               <tr
-                                  data-dbindex=${idx++}
-                                  title="click to load the database ${db.name}"
+                                  title="click to load the database ${escapeUnicode(
+                                      db.name,
+                                  )}"
                               >
-                                  <td>${db.name}</td>
+                                  <td>${escapeUnicode(db.name)}</td>
                                   <td class="center">${db.version}</td>
                                   <td class="center">${db.tables.length}</td>
                                   <td class="row-icons">
@@ -137,10 +141,9 @@ const template = (databases: KDatabase[]): TemplateResult => {
 
 const onTbodyClicked = (event: Event) => {
     const target = event.target as HTMLElement;
-    const td = target.closest('td');
-    const tr = target.closest('tr');
-    if (tr?.dataset?.dbindex) {
-        const databaseIdx = parseInt(tr.dataset.dbindex);
+    const databaseIdx = rowIndex(target);
+    if (databaseIdx !== -1) {
+        const td = target.closest('td');
         if (td?.firstElementChild && td.classList.contains('row-icons')) {
             const anchorId = td.firstElementChild.id;
             databaseTools.summon(databaseIdx, anchorId);

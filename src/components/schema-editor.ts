@@ -1,6 +1,6 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, render, type TemplateResult } from 'lit-html';
@@ -8,20 +8,23 @@ import { nothing } from 'lit';
 import { ref } from 'lit/directives/ref.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { type IndexSpec } from 'dexie';
-import appWindow from './app-window.ts';
-import Database from './database.ts';
-import Layer from './layer.ts';
-import messageStack from './messagestack.ts';
-import appStore from '../lib/app-store.ts';
-import { type AppTarget, globalTarget } from '../lib/app-target.ts';
-import { button, symbolButton } from '../lib/button.ts';
-import { getConnection } from '../lib/connection.ts';
-import { isIdentifier } from '../lib/identifier.ts';
-import textinput from '../lib/textinput.ts';
-import { uniqueId } from '../lib/utils.ts';
-import { type Position, EMPTY_POSITION } from '../lib/types/common.ts';
 
-interface SchemaEditorState {
+import appWindow from '#components/app-window';
+import Database from '#components/database';
+import Layer from '#components/layer';
+import messageStack from '#components/messagestack';
+import appStore from '#lib/app-store';
+import { globalTarget } from '#lib/app-target';
+import { button, symbolButton } from '#lib/button';
+import { getConnection } from '#lib/connection';
+import Draggable from '#lib/draggable';
+import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import { isIdentifier } from '#lib/identifier';
+import textinput from '#lib/textinput';
+import { uniqueId } from '#lib/utils';
+import { AppTarget, EMPTY_POSITION, type Position, type Schema } from '#types';
+
+type SchemaEditorState = {
     target: AppTarget;
     visible: boolean;
     node?: HTMLElement;
@@ -30,22 +33,18 @@ interface SchemaEditorState {
     tables: TableProps[];
     rememberedTables: TableProps[];
     addedTables: TableProps[];
-}
+};
 
-interface TableProps {
-    name: string;
-    tablename: string;
+type TableProps = {
+    name: string; // the name of existing tables, `table-${uniqueId()}` for added tables
+    tablename: string; // as entered into the name input field for added tables
     pk: string;
     indexes: string;
     invalid: Set<string>;
     deleted: boolean;
-}
+};
 
-interface Schema {
-    [key: string]: string | null;
-}
-
-const state = Symbol('schema-editor');
+const state = Symbol('schema-editor state');
 
 class SchemaEditor {
     [state]: SchemaEditorState;
@@ -54,7 +53,8 @@ class SchemaEditor {
     #rowHeight = '0px';
     constructor() {
         this[state] = this.initState;
-        this.#layer = new Layer({
+        const DraggableLayer = Draggable(Layer);
+        this.#layer = new DraggableLayer({
             closeHandler: this.close.bind(this),
             resizeHandler: this.fixPosition.bind(this),
         });
@@ -63,7 +63,6 @@ class SchemaEditor {
         return {
             target: globalTarget,
             visible: false,
-            node: undefined,
             position: EMPTY_POSITION,
             anchorPosition: EMPTY_POSITION,
             tables: [],
@@ -83,7 +82,6 @@ class SchemaEditor {
         const anchorPosition = anchorNode
             ? layer.anchorPosition(anchorNode)
             : EMPTY_POSITION;
-
         const position = layer.calculatePosition(anchorPosition, this[state].node);
         appWindow.removeInputHandler();
         appWindow.showOverlay();
@@ -101,6 +99,7 @@ class SchemaEditor {
     }
     fixPosition(): void {
         if (this[state].node === undefined) return;
+        if (this.#layer.wasDragged) return;
         const position = this.#layer.calculatePosition(
             this[state].anchorPosition,
             this[state].node,
@@ -165,9 +164,10 @@ class SchemaEditor {
               `
             : '';
     }
-    nodeReady(node?: Element): void {
-        if (node !== undefined) {
-            this[state].node = node as HTMLElement;
+    nodeReady(node?: Element) {
+        if (node instanceof HTMLElement) {
+            this[state].node = node;
+            this.#layer.makeDraggable(node);
             this.render();
             setTimeout(() => {
                 this.#colWidths = [...node.querySelectorAll('th')].map(
@@ -240,7 +240,7 @@ class SchemaEditor {
         const style = `width: ${this.#colWidths[2]}`;
         return html`
             <tr height=${this.#rowHeight || nothing}>
-                <td>${table.name}</td>
+                <td>${escapeUnicode(table.name)}</td>
                 <td>${table.pk}</td>
                 <td>${this.indexesInput(table, style)}</td>
                 <td>${this.deleteButton(table.name)}</td>
@@ -256,7 +256,9 @@ class SchemaEditor {
         });
         return html`
             <tr height=${this.#rowHeight || nothing}>
-                <td colspan="3" class="strike" title="table will be deleted">${name}</td>
+                <td colspan="3" class="strike" title="table will be deleted">
+                    ${escapeUnicode(name)}
+                </td>
                 <td>${undoButton}</td>
             </tr>
         `;
@@ -276,11 +278,7 @@ class SchemaEditor {
         });
         return rows;
     }
-    indexesInput(
-        table: TableProps,
-        style: string,
-        added: boolean = false,
-    ): TemplateResult {
+    indexesInput(table: TableProps, style: string, added = false): TemplateResult {
         return textinput({
             '.value': table.indexes,
             '@change': this.indexesChange.bind(this, table.name, added),
@@ -291,7 +289,7 @@ class SchemaEditor {
     }
     tablenameInput(table: TableProps, style: string): TemplateResult {
         return textinput({
-            '.value': table.tablename,
+            '.value': escapeUnicode(table.tablename),
             '@change': this.tablenameChange.bind(this, table.name),
             style,
             class: table.invalid.has('name') ? 'invalid' : null,
@@ -321,11 +319,8 @@ class SchemaEditor {
         const addedTables = this[state].addedTables;
         const table = addedTables[this.tableIndex(addedTables, name)];
         if (table) {
-            table.tablename = value;
-            const valid =
-                value.length !== 0 ||
-                (table.pk.length === 0 && table.indexes.length === 0);
-            table.invalid[valid ? 'delete' : 'add']('name');
+            table.tablename = unescapeUnicode(value);
+            this.checkNameMissing(table);
             this.update({ addedTables });
         }
     }
@@ -335,11 +330,13 @@ class SchemaEditor {
         const { tables, addedTables } = this[state];
         const valid = this.validateIndexes(value);
         const tablesArray = added ? addedTables : tables;
-        let table = tablesArray[this.tableIndex(tablesArray, name)];
+        const table = tablesArray[this.tableIndex(tablesArray, name)];
         if (table) {
             table.indexes = value;
             table.invalid[valid ? 'delete' : 'add']('indexes');
-            table = this.checkNameMissing(table);
+            if (added) {
+                this.checkNameMissing(table);
+            }
             this.update({ tables, addedTables });
         }
     }
@@ -348,22 +345,19 @@ class SchemaEditor {
         const value = target.value.trim();
         const addedTables = this[state].addedTables;
         const valid = this.validatePrimKey(value);
-        let table = addedTables[this.tableIndex(addedTables, name)];
+        const table = addedTables[this.tableIndex(addedTables, name)];
         if (table) {
             table.pk = value;
             table.invalid[valid ? 'delete' : 'add']('pk');
-            table = this.checkNameMissing(table);
+            this.checkNameMissing(table);
             this.update({ addedTables });
         }
     }
-    checkNameMissing(table: TableProps): TableProps {
+    checkNameMissing(table: TableProps): void {
         const { tablename, pk, indexes } = table;
-        if (tablename !== '') {
-            const missing =
-                tablename.length === 0 && (pk.length !== 0 || indexes.length !== 0);
-            table.invalid[missing ? 'add' : 'delete']('name');
-        }
-        return table;
+        const missing =
+            tablename.length === 0 && (pk.length !== 0 || indexes.length !== 0);
+        table.invalid[missing ? 'add' : 'delete']('name');
     }
     deleteTable(name: string, event: MouseEvent): void {
         event.preventDefault();
@@ -443,7 +437,9 @@ class SchemaEditor {
     }
     schemaValid(): boolean {
         const { tables, addedTables } = this[state];
-        return tables.concat(addedTables).every((table) => table.invalid.size === 0);
+        return tables
+            .concat(addedTables)
+            .every((table) => table.invalid.size === 0 || table.deleted);
     }
     schemaModified(): boolean {
         const { tables, rememberedTables } = this[state];

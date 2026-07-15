@@ -1,26 +1,28 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html } from 'lit-html';
-import configLayer from './configlayer.ts';
-import Database from './database.ts';
-import datatable from './datatable.ts';
-import exporter from './exporter.ts';
-import importer from './importer.ts';
-import messageStack from './messagestack.ts';
-import appStore from '../lib/app-store.ts';
-import { type AppTarget, globalTarget, isDatabase } from '../lib/app-target.ts';
-import checkbox from '../lib/checkbox.ts';
-import { getConnection } from '../lib/connection.ts';
-import { copyTableData, tableIndexesSpec } from '../lib/dexie-utils.ts';
-import messenger from '../lib/messenger.ts';
-import svgIcon from '../lib/svgicon.ts';
-import textinput from '../lib/textinput.ts';
-import { camelize, selfMap, uniqueName } from '../lib/utils.ts';
-import type { KTable } from '../lib/types/common.ts';
-import { labeledSelectbox } from '../lib/selectbox.ts';
+
+import configLayer from '#components/configlayer';
+import Database from '#components/database';
+import datatable from '#components/datatable';
+import exporter from '#components/exporter';
+import importer from '#components/importer';
+import messageStack from '#components/messagestack';
+import appStore from '#lib/app-store';
+import { globalTarget, isDatabase } from '#lib/app-target';
+import checkbox from '#lib/checkbox';
+import { getConnection } from '#lib/connection';
+import { copyTableData, tableIndexesSpec } from '#lib/dexie-utils';
+import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import messenger from '#lib/messenger';
+import { labeledSelectbox } from '#lib/selectbox';
+import svgIcon from '#lib/svgicon';
+import textinput from '#lib/textinput';
+import { camelize, selfMap, uniqueName } from '#lib/utils';
+import type { AppTarget, KTable } from '#types';
 
 interface TableToolsState {
     target: AppTarget;
@@ -137,7 +139,9 @@ const TableTools = class {
         `;
     }
     copyPanel() {
-        const targetDBs = selfMap(appStore.state.databases.map((db) => db.name));
+        const targetDBs = selfMap(
+            appStore.state.databases.map((db) => escapeUnicode(db.name)),
+        );
         const content = html`
             <div>
                 <div>
@@ -146,7 +150,7 @@ const TableTools = class {
                         id: 'copy-tablename',
                         size: 15,
                         required: true,
-                        '.value': this[state].copyTablename,
+                        '.value': escapeUnicode(this[state].copyTablename),
                         '@change': this.optionChanged.bind(this),
                     })}
                 </div>
@@ -157,7 +161,7 @@ const TableTools = class {
                         options: targetDBs,
                         selected: this[state].target.database,
                         required: true,
-                        '.value': this[state].copyTargetDb,
+                        '.value': escapeUnicode(this[state].copyTargetDb),
                         '@change': this.optionChanged.bind(this),
                     })}
                 </div>
@@ -194,7 +198,7 @@ const TableTools = class {
             ].includes(option)
         ) {
             const value = ['copyTablename', 'copyTargetDb'].includes(option)
-                ? target.value.trim()
+                ? unescapeUnicode(target.value.trim())
                 : target.checked;
             this[state] = { ...this[state], [option]: value };
         }
@@ -249,7 +253,7 @@ const TableTools = class {
         }
         appStore.update({
             loading: true,
-            loadingMsg: `copying table, source: ${sourceTable}, target: ${targetTable}`,
+            loadingMsg: `copying table, source: ${escapeUnicode(sourceTable)}, target: ${escapeUnicode(targetTable)}`,
         });
         configLayer.close();
         try {
@@ -288,7 +292,7 @@ const TableTools = class {
             Database.init(appStore.databaseIdx(sourceDb));
         }
         messageStack.displaySuccess(
-            `Table copied! (source: ${sourceTable}, target: ${targetTable}${targetDb !== sourceDb ? ` in database: ${targetDb}` : ''})`,
+            `Table copied! (source: ${escapeUnicode(sourceTable)}, target: ${escapeUnicode(targetTable)}${targetDb !== sourceDb ? ` in database: ${targetDb}` : ''})`,
         );
     }
     async validateCopyTablename(

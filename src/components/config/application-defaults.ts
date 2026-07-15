@@ -1,9 +1,9 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-type DefaultOptions = {
+type ApplicationDefaultOptions = {
     colorScheme: 'browser' | 'dark' | 'light';
     colorSchemeOrigin: 'same' | 'dark' | 'light';
     colorStringDarkmode: string;
@@ -14,7 +14,7 @@ type DefaultOptions = {
     ignoreDatabases: string[];
 };
 
-const applicationDefaultOptions = (): DefaultOptions => {
+const applicationDefaultOptions = (): ApplicationDefaultOptions => {
     return {
         colorScheme: 'browser',
         colorSchemeOrigin: 'same',

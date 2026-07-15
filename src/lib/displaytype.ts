@@ -1,15 +1,22 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
-import { type AllowedType, stringFormatter } from './value-formatter.ts';
+import { html, TemplateResult } from 'lit-html';
+import { ref } from 'lit/directives/ref.js';
 
-interface DisplayOptions {
+import { getType, sizeOrLength } from '#lib/datatypes';
+import { compactedFrom } from '#lib/datatype-attributes';
+import env from '#lib/environment';
+import { type AllowedType, formatterOptions, ValueFormatter } from '#lib/value-formatter';
+
+type DisplayOptions = {
     format: string;
     previewSize: number;
-}
+};
+
+const stringFormatter = new ValueFormatter('string');
 
 const display = (val: unknown, type: AllowedType, options: DisplayOptions) => {
     if (type in typesDisplayableAs && typesDisplayableAs[type].includes(options.format)) {
@@ -18,19 +25,46 @@ const display = (val: unknown, type: AllowedType, options: DisplayOptions) => {
             return res;
         }
     }
-    if (typeof val === 'string' && type === 'string' && val.length === 0) {
+    if (typeof val === 'string' && val.length === 0) {
         return html`
             <span class="italic" title="empty string">""</span>
         `;
     }
-    return stringFormatter.render(val, type);
+    if (type in valueTitle) {
+        return html`
+            <span class="italic" title="${valueTitle[type](val)}">
+                ${stringFormatter.render(val, type)}
+            </span>
+        `;
+    }
+    const result = stringFormatter.render(val, type, displayOptions(type, val));
+    return typeof val === 'string'
+        ? html`
+              <span title="String({ length: ${val.length})">${result}</span>
+          `
+        : result;
 };
+
+function displayOptions(type: AllowedType, val: unknown) {
+    const options = formatterOptions({
+        escapeNonCharacters: true,
+        unescapedLineFeeds: false,
+    });
+    if (type === 'string') {
+        options.trimLength = 500;
+    } else if ((sizeOrLength(val) || Infinity) >= compactedFrom(type)) {
+        options.expanded = false;
+    }
+    return options;
+}
 
 const typesDisplayableAs: { [key: string]: string[] } = {
     string: ['url'],
     number: ['date'],
     blob: ['image'],
     file: ['image'],
+    imagedata: ['image'],
+    imagebitmap: ['image'],
 } as const;
 
 /**
@@ -57,7 +91,7 @@ const displayAs = (val: unknown, type: AllowedType, options: DisplayOptions) => 
         }
     }
     if (format === 'date' && typeof val === 'number' && Number.isInteger(val)) {
-        let str: string = '';
+        let str = '';
         if (inMicroRange(val)) {
             str = `${new Date(val).toISOString()}`;
         } else if (inSecondsRange(val)) {
@@ -75,37 +109,98 @@ const displayAs = (val: unknown, type: AllowedType, options: DisplayOptions) => 
             `;
         }
     }
-    if (
-        format === 'image' &&
-        ['blob', 'file'].includes(type) &&
-        imageMimeTypes.includes((val as Blob).type)
-    ) {
-        const url = URL.createObjectURL(val as Blob);
-        const containerStyles = ['width', 'height', 'line-height'].map(
-            (s) => `${s}: ${previewSize}px`,
-        );
-        const title = stringFormatter.render(val, type);
-        const alt = `image preview of a ${type} value from type ${(val as Blob).type}`;
-        return html`
+    if (format === 'image') {
+        if (
+            val instanceof Blob && // also true for File values
+            imageMimeTypes.includes(val.type)
+        ) {
+            const url = URL.createObjectURL(val);
+            const title = stringFormatter.render(val, type);
+            const alt = `image preview of a ${type.toUpperCase()} value of type ${val.type}`;
+            const content = html`
+                <img src="${url}" @load=${revokeImageUrl} />
+            `;
+            return imagePreviewBox(content, title, alt, previewSize);
+        } else if (val instanceof ImageData) {
+            const title = stringFormatter.render(val, type, { expanded: false });
+            const alt = `image preview of an ImageData value`;
+            const content = html`
+                <img
+                    ${ref((el) => injectImageDataDataUrl(el, val))}
+                    @load=${revokeImageUrl}
+                />
+            `;
+            return imagePreviewBox(content, title, alt, previewSize);
+        } else if (val instanceof ImageBitmap) {
+            const title = stringFormatter.render(val, type);
+            const alt = `image preview of an ImageBitmap value`;
+            const content = html`
+                <canvas ${ref((el) => drawImageBitmap(el, val, previewSize))} />
+            `;
+            return imagePreviewBox(content, title, alt, previewSize);
+        }
+    }
+    return false;
+};
+
+function imagePreviewBox(
+    content: TemplateResult,
+    title: string,
+    alt: string,
+    previewSize: number,
+) {
+    const containerStyles = ['width', 'height', 'line-height'].map(
+        (s) => `${s}: ${previewSize}px`,
+    );
+    return html`
+        <div class="preview-wrapper" style="${containerStyles.join(';')}">
             <div
                 class="preview-box"
                 title=${title}
                 alt=${alt}
                 style=${containerStyles.join(';')}
             >
-                <img src="${url}" @load=${previewLoaded.bind(null, url)}>
-                </img>
-            </div>`;
-    }
-    return false;
-};
+                ${content}
+            </div>
+        </div>
+    `;
+}
 
-const previewLoaded = (url: string, event: Event) => {
-    URL.revokeObjectURL(url);
-    const target = event.target as HTMLElement;
-    const container = target.parentNode as HTMLElement;
-    container.classList.add('center');
-};
+function drawImageBitmap(node?: Element, bitmap?: ImageBitmap, previewSize = 20) {
+    if (!(node instanceof HTMLCanvasElement) || !bitmap) return;
+    const ctx = node.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    node.width = previewSize * dpr;
+    node.height = previewSize * dpr;
+    node.style.width = `${previewSize}px`;
+    node.style.height = `${previewSize}px`;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // reset + scale
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    const scale = Math.min(previewSize / bitmap.width, previewSize / bitmap.height);
+    const drawWidth = bitmap.width * scale;
+    const drawHeight = bitmap.height * scale;
+    const dx = (previewSize - drawWidth) / 2;
+    const dy = (previewSize - drawHeight) / 2;
+    ctx.drawImage(bitmap, dx, dy, drawWidth, drawHeight);
+}
+
+async function injectImageDataDataUrl(node?: Element, val?: ImageData) {
+    if (node instanceof HTMLImageElement === false || !val) return;
+    const canvas = new OffscreenCanvas(val.width, val.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.putImageData(val, 0, 0);
+    const blob = await canvas.convertToBlob();
+    node.setAttribute('src', URL.createObjectURL(blob));
+}
+
+function revokeImageUrl(this: HTMLImageElement) {
+    URL.revokeObjectURL(this.src);
+}
 
 const uriSchemeRegExp = /^((https?)|(ftps?)|(file)):\/\//i;
 
@@ -152,5 +247,21 @@ const imageMimeTypes = [
     'image/avif',
     'image/apng',
 ];
+
+const valueTitle: Record<string, (val: unknown) => string> = {
+    cryptokey: (val) => {
+        if (!(val instanceof CryptoKey)) return '';
+        return (['type', 'usages', 'algorithm', 'extractable'] as const)
+            .map(
+                (prop) =>
+                    `${prop}: ${stringFormatter.render(val[prop], getType(val[prop]))}`,
+            )
+            .join('\n');
+    },
+};
+if (env.manifestVersion === 2) {
+    // firefox can't access the properties if the CryptoKey originates from the database.
+    delete valueTitle.cryptokey;
+}
 
 export default display;

@@ -1,17 +1,18 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, TemplateResult } from 'lit-html';
 import { styleMap } from 'lit/directives/style-map.js';
-import appWindow from './app-window.ts';
-import Layer from './layer.ts';
-import displayConfigControl from './config/config-control.ts';
-import appStore from '../lib/app-store.ts';
-import { globalTarget } from '../lib/app-target.ts';
-import svgIcon from '../lib/svgicon.ts';
-import { EMPTY_POSITION, Position } from '../lib/types/common.ts';
+
+import appWindow from '#components/app-window';
+import Layer from '#components/layer';
+import displayConfigControl from '#components/config/config-control';
+import appStore from '#lib/app-store';
+import { globalTarget } from '#lib/app-target';
+import svgIcon from '#lib/svgicon';
+import { EMPTY_POSITION, Position } from '#types';
 
 interface MainMenuState {
     visible: boolean;
@@ -38,7 +39,7 @@ const MainMenu = class {
         appStore.rerender();
     }
     show(event: MouseEvent): void {
-        const target = event.target as HTMLElement;
+        const target = event.target as Element;
         const anchor = target.closest('button');
         const position =
             anchor instanceof Element
@@ -86,8 +87,8 @@ const MainMenu = class {
         }
     }
     click(event: MouseEvent): void {
-        const target = event.target as HTMLElement;
-        if (target.nodeName === 'A') {
+        const target = event.target as Element;
+        if (target instanceof HTMLAnchorElement) {
             event.stopPropagation();
             this.close();
             const subject = target.dataset.subject;

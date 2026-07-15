@@ -1,13 +1,14 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html } from 'lit-html';
 import { ref } from 'lit/directives/ref.js';
-import appWindow from './app-window.ts';
-import appStore from '../lib/app-store.ts';
-import { symbolButton } from '../lib/button.ts';
+
+import appWindow from '#components/app-window';
+import appStore from '#lib/app-store';
+import { symbolButton } from '#lib/button';
 
 interface LoadingPanelState {
     visible: boolean;

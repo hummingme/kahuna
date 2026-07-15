@@ -1,22 +1,21 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html } from 'lit-html';
 
-import configLayer from '../components/configlayer.ts';
-import datatable from '../components/datatable.ts';
-import messageStack from '../components/messagestack.ts';
-import appStore from './app-store.ts';
-import type { AppTarget } from './app-target.ts';
-import { getConnection } from './connection.ts';
-import { isPlainObject } from './datatypes.ts';
-import { getCollection } from './dexie-utils.ts';
-import settings from './settings.ts';
-import svgIcon from './svgicon.ts';
-import type { UnknownRecord } from './types/common.ts';
-import type { SettingObject } from './types/settings.ts';
+import configLayer from '#components/configlayer';
+import datatable from '#components/datatable';
+import messageStack from '#components/messagestack';
+import appStore from '#lib/app-store';
+import { getConnection } from '#lib/connection';
+import { isPlainObject } from '#lib/datatypes';
+import { getCollection } from '#lib/dexie-utils';
+import settings from '#lib/settings';
+import svgIcon from '#lib/svgicon';
+import { plural } from '#lib/utils';
+import type { AppTarget, SettingObject, UnknownRecord } from '#types';
 
 const scrubblerTable = () => {
     const { database, table } = appStore.target();
@@ -51,7 +50,7 @@ export const scrubblerTopic = (topic: string | null, count: number, loading: boo
     const { table } = scrubblerTable();
     if (!table) return '';
 
-    const s = count > 1 ? 's' : '';
+    const s = plural(count);
     const subject = table === 'edits' ? `automatic edit${s}` : `scrobble${s}`;
     return html`
         <p>

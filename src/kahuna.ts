@@ -1,34 +1,35 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, render } from 'lit-html';
-import appWindow from './components/app-window.ts';
-import Breadcrumb from './components/breadcrumb.ts';
-import configLayer from './components/configlayer.ts';
-import Database from './components/database.ts';
-import datatable from './components/datatable.ts';
-import Origin from './components/origin.ts';
-import appStore, { type AppState } from './lib/app-store.ts';
-import appWorker from './lib/app-worker.ts';
-import env from './lib/environment.ts';
-import messenger from './lib/messenger.ts';
-import startupCheckings from './lib/startup-checkings.ts';
-import settings from './lib/settings.ts';
+
+import appWindow from '#components/app-window';
+import Breadcrumb from '#components/breadcrumb';
+import configLayer from '#components/configlayer';
+import Database from '#components/database';
+import datatable from '#components/datatable';
+import Origin from '#components/origin';
+import appStore, { type AppState } from '#lib/app-store';
+import appWorker from '#lib/app-worker';
+import env from '#lib/environment';
+import messenger from '#lib/messenger';
+import settings from '#lib/settings';
+import startupCheckings from '#lib/startup-checkings';
+import { sleep } from '#lib/utils';
 
 const DEVEL = false;
 if (DEVEL) {
     window.setTimeout(() => {
-        const button = appWindow?.root?.querySelector(
+        const button = appWindow?.root?.querySelector<HTMLButtonElement>(
             'button[title="database tools"]',
-        ) as HTMLButtonElement;
-        button.click();
+        );
+        button?.click();
         window.setTimeout(() => {
-            const topic = appWindow?.root?.querySelector(
-                'a[data-topic="edit"]',
-            ) as HTMLAnchorElement;
-            topic.click();
+            const topic =
+                appWindow?.root?.querySelector<HTMLAnchorElement>('a[data-topic="edit"]');
+            topic?.click();
         }, 500);
     }, 500);
 }
@@ -104,10 +105,11 @@ async function reloadApp() {
 
 type GlobalErrorEvent = ErrorEvent | PromiseRejectionEvent | SecurityPolicyViolationEvent;
 
-const handleGlobalError = (event: GlobalErrorEvent) => {
+const handleGlobalError = async (event: GlobalErrorEvent) => {
     if (isSecurityPolicyViolationEvent(event)) {
         env.workersBlocked = true;
         appWorker.terminate();
+        await sleep(100);
         reloadApp();
     } else {
         // eslint-disable-next-line no-console

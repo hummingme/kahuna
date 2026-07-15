@@ -1,6 +1,6 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import type { Table } from 'dexie';
@@ -9,80 +9,63 @@ import { nothing } from 'lit';
 import { styleMap } from 'lit/directives/style-map.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
-import appWindow from './app-window.ts';
-import ChevronNavigation from './chevron-navigation.ts';
-import importer from './importer.ts';
-import jsCodearea from './js-codearea.ts';
-import messageStack from './messagestack.ts';
-import SelectionTools from './selection-tools.ts';
-import tableTools from './table-tools.ts';
-import tooltip from './tooltip.ts';
-import BehaviorConfig from './config/behavior-config.ts';
-import ColumnsConfig, { columnsDefaultOrder } from './config/columns-config.ts';
-import displayConfigControl from './config/config-control.ts';
-import FiltersConfig from './config/filters-config.ts';
-import FilterFieldsConfig from './config/filter-fields-config.ts';
+import appWindow from '#components/app-window';
+import ChevronNavigation from '#components/chevron-navigation';
+import importer from '#components/importer';
+import jsCodearea from '#components/js-codearea';
+import messageStack from '#components/messagestack';
+import SelectionTools from '#components/selection-tools';
+import tableTools from '#components/table-tools';
+import tooltip from '#components/tooltip';
+import BehaviorConfig from '#components/config/behavior-config';
+import ColumnsConfig from '#components/config/columns-config';
+import { columnsDefaultOrder } from './config/columns-default';
+import displayConfigControl from '#components/config/config-control';
+import FiltersConfig from '#components/config/filters-config';
+import FilterFieldsConfig from '#components/config/filter-fields-config';
+import displayValueEditor from '#components/value-editor/editor';
 
-import appStore from '../lib/app-store.ts';
-import { globalTarget, type AppTarget } from '../lib/app-target.ts';
-import appWorker from '../lib/app-worker.ts';
-import { button, symbolButton } from '../lib/button.ts';
-import { buildColumn, type Column } from '../lib/column.ts';
-import { getConnection } from '../lib/connection.ts';
-import * as t from '../lib/datatypes.ts';
-import { decodeQueryResult } from '../lib/data-wrapper.ts';
-import {
-    isPrimKeyNamed,
-    isPrimKeyUnnamed,
-    isPrimKeyCompound,
-} from '../lib/dexie-utils.ts';
-import display from '../lib/displaytype.ts';
-import env from '../lib/environment.ts';
+import appStore from '#lib/app-store';
+import { globalTarget } from '#lib/app-target';
+import appWorker from '#lib/app-worker';
+import { button, symbolButton } from '#lib/button';
+import { buildColumn, type Column } from '#lib/column';
+import { getConnection } from '#lib/connection';
+import * as t from '#lib/datatypes';
+import { decodeQueryResult } from '#lib/data-wrapper';
+import { isPrimKeyNamed, isPrimKeyUnnamed, isPrimKeyCompound } from '#lib/dexie-utils';
+import display from '#lib/displaytype';
+import env from '#lib/environment';
+import { escapeUnicode } from '#lib/escape-unicode';
 import {
     isFiltered,
     isFilterValid,
     isIndexedFilter,
     methodProperties,
-    type Filter,
-} from '../lib/filter.ts';
-import messenger from '../lib/messenger.ts';
-import { queryData, type QueryDataArgs } from '../lib/querydata.ts';
-import { checkScrubbler } from '../lib/scrubbler.ts';
-import { selectbox } from '../lib/selectbox.ts';
-import {
-    rowSelector,
-    rowSelectorFields,
-    rowSelectorPrimKey,
-} from '../lib/row-selection.ts';
-import svgIcon from '../lib/svgicon.ts';
-import textinput from '../lib/textinput.ts';
-import { addNestedValues } from '../lib/utils.ts';
-import {
-    type AllowedType,
-    sourceFormatter,
-    stringFormatter,
-} from '../lib/value-formatter.ts';
-import type { Direction, KTable, PlainObject } from '../lib/types/common.ts';
-import type { Message, QueryResultMessagePayload } from '../lib/types/messages.ts';
+} from '#lib/filter';
+import { hideMessageType, getHiddenMessagesOrigin } from '#lib/hidden-messages';
+import messenger from '#lib/messenger';
+import { queryData } from '#lib/querydata';
+import { checkScrubbler } from '#lib/scrubbler';
+import { selectbox } from '#lib/selectbox';
+import { rowSelector, rowSelectorFields, rowSelectorPrimKey } from '#lib/row-selection';
+import svgIcon from '#lib/svgicon';
+import textinput from '#lib/textinput';
+import { addNestedValues } from '#lib/utils';
+import { type AllowedType, ValueFormatter } from '#lib/value-formatter';
+import type {
+    AppTarget,
+    Direction,
+    Filter,
+    KTable,
+    Message,
+    QueryResultMessagePayload,
+    Position,
+    QueryDataArgs,
+    UnknownRecord,
+} from '#types';
 
-export interface DatatableState extends DatatableSettings {
-    dexieTable?: Table;
-    selectedTable?: number;
-    target: AppTarget;
-    columns: Column[];
-    filters: Filter[];
-    data: PlainObject[];
-    selectorFields: string[];
-    selected: Set<string | number>;
-    offset: number;
-    total: number;
-    editSelector: unknown | unknown[];
-    colResizing?: ColumnResizeData;
-    firstrun: boolean;
-    aborted: boolean;
-}
-
-interface DatatableSettings {
+type DatatableSettings = {
     order: string;
     direction: Direction;
     displayDiscoveredColumns: boolean;
@@ -90,8 +73,27 @@ interface DatatableSettings {
     limit: number;
     confirmDeleteRow: boolean;
     displayCodearea: boolean;
+    queryPreferWorker: boolean;
     previewSize: number;
-}
+};
+
+export type DatatableState = DatatableSettings & {
+    dexieTable?: Table;
+    selectedTable?: number;
+    target: AppTarget;
+    columns: Column[];
+    filters: Filter[];
+    data: UnknownRecord[];
+    selectorFields: string[];
+    selected: Set<string | number>;
+    offset: number;
+    total: number;
+    rowSelector?: unknown | unknown[];
+    colResizing?: ColumnResizeData | undefined;
+    firstrun: boolean;
+    aborted: boolean;
+    scrollPos: ScrollToOptions;
+};
 
 type ColumnResizeData = { startX: number; startWidth: number; index: number };
 
@@ -110,8 +112,6 @@ const Datatable = class {
     }
     get emptyState(): DatatableState {
         return {
-            dexieTable: undefined,
-            selectedTable: undefined,
             target: globalTarget,
             columns: [],
             filters: [],
@@ -120,8 +120,6 @@ const Datatable = class {
             selected: new Set(),
             offset: 1,
             total: 0,
-            editSelector: undefined,
-            colResizing: undefined,
             firstrun: true,
             aborted: false,
             order: '',
@@ -131,7 +129,9 @@ const Datatable = class {
             limit: 20,
             confirmDeleteRow: true,
             displayCodearea: true,
+            queryPreferWorker: true,
             previewSize: 30,
+            scrollPos: { top: 0, left: 0 },
         };
     }
     get table(): KTable | undefined {
@@ -146,23 +146,23 @@ const Datatable = class {
         return [...this.#state.filters];
     }
     get breadcrumbIcons() {
-        return [
-            {
-                icon: 'tabler-settings',
-                title: 'table tools',
-                id: tableToolsButtonId,
-                '@click': tableToolsClicked.bind(
-                    null,
-                    this.#state.selectedTable as number,
-                ),
-            },
-            {
-                icon: 'tabler-adjustments',
-                title: 'table settings and configuration',
-                '@click': settingsConfigClicked,
-                id: 'settings-config',
-            },
-        ];
+        const selectedTable = this.#state.selectedTable;
+        return typeof selectedTable === 'number'
+            ? [
+                  {
+                      icon: 'tabler-settings',
+                      title: 'table tools',
+                      id: tableToolsButtonId,
+                      '@click': tableToolsClicked.bind(null, selectedTable),
+                  },
+                  {
+                      icon: 'tabler-adjustments',
+                      title: 'table settings and configuration',
+                      '@click': settingsConfigClicked,
+                      id: 'settings-config',
+                  },
+              ]
+            : [];
     }
 
     /**
@@ -185,12 +185,12 @@ const Datatable = class {
             total: table.count, // filters applied
         };
         await jsCodearea.init({
+            user: 'datatable',
             enabled: settings.displayCodearea && env.codeExecution,
             target,
             selectorFields,
-            executed: async () => await codeareaExecuted(),
-            requiredVariables: async () =>
-                await codeareaRequiredVariables(datatable.state),
+            executed: codeareaExecuted,
+            requireVariables: () => codeareaRequireVariables(datatable.state),
         });
         await checkScrubbler(target);
         await this.updateDatatable(initialState);
@@ -219,7 +219,12 @@ const Datatable = class {
             values: { markUnindexed },
         } = await FiltersConfig.getSettings(target);
         const {
-            values: { datatableRows, confirmDeleteRow, displayCodearea },
+            values: {
+                datatableRows,
+                confirmDeleteRow,
+                displayCodearea,
+                queryPreferWorker,
+            },
         } = await BehaviorConfig.getSettings(target);
         return {
             order,
@@ -229,6 +234,7 @@ const Datatable = class {
             limit: datatableRows,
             confirmDeleteRow,
             displayCodearea,
+            queryPreferWorker,
             previewSize,
         };
     }
@@ -253,14 +259,23 @@ const Datatable = class {
         return html`
             <div>
                 <h1 class="precis">${headlineView(table)}</h1>
-                ${content} ${content ? jsCodearea.view() : ''}
+                ${content} ${content ? jsCodearea.node() : ''}
             </div>
         `;
     }
     async updateDatatable(stateDiff: Partial<DatatableState>) {
         this.update(Object.assign(stateDiff, { data: [], total: 0 }));
-        const { target, dexieTable, filters, order, direction, offset, limit, firstrun } =
-            this.#state;
+        const {
+            target,
+            dexieTable,
+            filters,
+            order,
+            direction,
+            offset,
+            limit,
+            queryPreferWorker,
+            firstrun,
+        } = this.#state;
         appStore.update({
             loading: true,
             loadingMsg: 'loading data',
@@ -268,7 +283,7 @@ const Datatable = class {
         });
         const addUnnamedPk =
             dexieTable !== undefined && isPrimKeyUnnamed(dexieTable.schema.primKey);
-        const params: QueryDataArgs = {
+        const load: QueryDataArgs = {
             dbname: target.database,
             tablename: target.table,
             addUnnamedPk,
@@ -279,20 +294,23 @@ const Datatable = class {
             limit: firstrun && limit < 50 ? 50 : limit,
             encodeQueryResult: env.bigIntArrayFlaw === true,
         };
-        if (env.workersBlocked) {
-            const result = await queryData(params);
+        if (env.workersBlocked === true || queryPreferWorker === false) {
+            const result = await queryData(load);
             await processQueryResult({ ...result, encoded: false });
         } else {
-            messenger.post({ type: 'queryData', params });
+            messenger.post({ type: 'queryData', load });
         }
     }
     async reloadDatatable(stateDiff: Partial<DatatableState>) {
         if (appStore.loading === true) {
             await this.abortQueryData(true);
         }
+        this.update({
+            scrollPos: { left: appWindow.main.scrollLeft, top: appWindow.main.scrollTop },
+        });
         await this.updateDatatable(stateDiff);
     }
-    async setData({ data, total }: { data: PlainObject[]; total: number }) {
+    async setData({ data, total }: { data: UnknownRecord[]; total: number }) {
         const table = this.table;
         let { columns, filters } = this.#state;
         const {
@@ -366,19 +384,19 @@ const Datatable = class {
     };
 };
 
-const addKeypathsData = (data: PlainObject[], columns: Column[]) => {
+const addKeypathsData = (data: UnknownRecord[], columns: Column[]) => {
     const paths = columns.filter((c) => c.innerValue === true).map((c) => c.name);
     return addNestedData(data, paths);
 };
 
-const addNestedData = (data: PlainObject[], paths: string[]) => {
-    data.forEach((row, idx) => {
-        data[idx] = addNestedValues(row, paths);
+const addNestedData = (data: UnknownRecord[], paths: string[]) => {
+    data.forEach((row) => {
+        addNestedValues(row, paths);
     });
     return data;
 };
 
-const getDataProperties = (data: PlainObject[]) => {
+const getDataProperties = (data: UnknownRecord[]) => {
     const props = [];
     for (const row of data) {
         props.push(...Object.getOwnPropertyNames(row));
@@ -387,7 +405,7 @@ const getDataProperties = (data: PlainObject[]) => {
 };
 
 const columnsFromData = (
-    data: PlainObject[],
+    data: UnknownRecord[],
     columns: Column[],
     displayDiscoveredColumns: boolean,
     firstrun = false,
@@ -477,7 +495,7 @@ const columnsFromKeypath = (keypath: string[], columns: Column[]) => {
  * the width of the column headers and data is analyzed
  * and the available table width is divided between the columns
  */
-const setColumnsWidths = (columns: Column[], data: PlainObject[]) => {
+const setColumnsWidths = (columns: Column[], data: UnknownRecord[]) => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
 
@@ -497,9 +515,9 @@ const setColumnsWidths = (columns: Column[], data: PlainObject[]) => {
         const widths: number[] = [];
         ctx.font = `400 15px ${fonts}`;
         columns.forEach((col, idx) => {
-            const cvals = data.map((row) => row[col.name]);
-            cvals.forEach((val) => {
-                const text = ctx.measureText(val);
+            const columnVals = data.map((row) => row[col.name]);
+            columnVals.forEach((val) => {
+                const text = ctx.measureText(String(val));
                 if (!widths[idx] || widths[idx] < text.width) {
                     widths[idx] = Math.floor(text.width);
                 }
@@ -540,30 +558,27 @@ const setColumnsWidths = (columns: Column[], data: PlainObject[]) => {
 /*
  * a filter value has changed -> validate and save the filter
  */
-const onFilterChanged = (event: Event) => {
-    const target = event.target;
-    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) {
-        const idx = parseInt(target.dataset.searchindex || '');
-        const val = target.value.trim();
-        const filters = datatable.filters;
-        if (Number.isInteger(idx) && val !== filters[idx].search) {
-            filters[idx].search = val;
-            filters[idx].valid = isFilterValid(val, filters[idx]);
-            FilterFieldsConfig.saveFilters(filters, appStore.target());
-            datatable.update({ filters });
-        }
+function onFilterChanged(this: HTMLInputElement) {
+    const idx = parseInt(this.dataset.searchindex || '');
+    const val = this.value.trim();
+    const filters = datatable.filters;
+    if (Number.isInteger(idx) && val !== filters[idx].search) {
+        filters[idx].search = val;
+        filters[idx].valid = isFilterValid(val, filters[idx]);
+        FilterFieldsConfig.saveFilters(filters, appStore.target());
+        datatable.update({ filters });
     }
-};
+}
 
 /*
  * trigger search on Enter in a filter element
  */
-const onFilterKeydown = (event: KeyboardEvent) => {
+function onFilterKeydown(this: HTMLInputElement, event: KeyboardEvent) {
     if (event.key === 'Enter') {
-        onFilterChanged(event);
+        onFilterChanged.bind(this)();
         doSearch();
     }
-};
+}
 
 /*
  * event handler for 'trigger search' button and called by onFilterKeydown
@@ -602,15 +617,19 @@ const navigate = (offset: number) => {
  * onclick action of the column header title links
  */
 function onColumnClicked(this: HTMLElement) {
-    const colindex = parseInt(this.closest('a')?.dataset.colindex || '');
-    if (Number.isInteger(colindex)) {
+    const colindex = this.closest('th')?.cellIndex;
+    if (colindex !== undefined) {
         orderColumn(colindex);
     }
 }
 
 const onKeydown = (event: KeyboardEvent) => {
-    const focused = appWindow.root.activeElement as HTMLElement;
-    if (event.key === 'Enter' && focused?.tagName === 'A' && focused.dataset.colindex) {
+    const focused = appWindow.root.activeElement;
+    if (
+        event.key === 'Enter' &&
+        focused instanceof HTMLAnchorElement &&
+        focused.dataset.colindex
+    ) {
         orderColumn(parseInt(focused.dataset.colindex));
     }
 };
@@ -658,10 +677,7 @@ const unsetOrder = () => {
 };
 
 const moveTarget = (event: MouseEvent) => {
-    const target = event.target as HTMLElement;
-    return (
-        target.matches('div[data-colindex]') || datatable.state.colResizing !== undefined
-    );
+    return isResizeHandle(event.target) || datatable.state.colResizing !== undefined;
 };
 
 const columnResizeStart = (event: MouseEvent) => {
@@ -680,7 +696,7 @@ const columnResizeStart = (event: MouseEvent) => {
 
 const resizeColumn = (posX: number) => {
     const { columns, colResizing } = datatable.state;
-    const { startX, startWidth, index } = colResizing as ColumnResizeData;
+    const { startX, startWidth, index } = colResizing!;
     const delta = posX - startX;
     visibleColumns(columns)[index].width = Math.max(20, startWidth + delta);
     handleWidthHandle(index - 1, 'visible');
@@ -689,12 +705,16 @@ const resizeColumn = (posX: number) => {
 };
 
 const columnResizeStop = (event: Event) => {
-    const target = event.target as HTMLElement;
-    if (target.matches('div[data-colindex]') === false) {
+    if (isResizeHandle(event.target) === false) {
         hideWidthHandles();
     }
     datatable.update({ colResizing: undefined });
     ColumnsConfig.saveColumns(datatable.columns, appStore.target());
+    prepareDatatable();
+};
+
+const isResizeHandle = (node: EventTarget | null) => {
+    return node instanceof HTMLDivElement && Object.hasOwn(node.dataset, 'colindex');
 };
 
 /*
@@ -706,9 +726,8 @@ const onMouseOverHeader = (job: HeaderJob, event: Event) => {
         return;
     }
     const target = event.target as HTMLElement;
-    const link = target.closest('th')?.firstElementChild as HTMLAnchorElement;
-    const colIndex = parseInt(link?.dataset.colindex || '');
-    if (Number.isInteger(colIndex)) {
+    const colIndex = target.closest('th')?.cellIndex;
+    if (colIndex) {
         hideWidthHandles();
         handleWidthHandle(colIndex, job);
         if (colIndex > 0) {
@@ -717,9 +736,9 @@ const onMouseOverHeader = (job: HeaderJob, event: Event) => {
     }
 };
 const handleWidthHandle = (index: number, job: HeaderJob) => {
-    const handle = appWindow.root.querySelector(
+    const handle = appWindow.root.querySelector<HTMLElement>(
         `div.width-handle[data-colindex="${index}"]`,
-    ) as HTMLElement;
+    );
     if (handle) {
         if (handle.matches(':hover')) {
             handle.style.visibility = 'visible';
@@ -730,8 +749,8 @@ const handleWidthHandle = (index: number, job: HeaderJob) => {
 };
 const hideWidthHandles = () => {
     appWindow.root
-        .querySelectorAll('div.width-handle')
-        .forEach((handle) => ((handle as HTMLElement).style.visibility = 'hidden'));
+        .querySelectorAll<HTMLElement>('div.width-handle')
+        .forEach((handle) => (handle.style.visibility = 'hidden'));
 };
 
 /*
@@ -739,9 +758,11 @@ const hideWidthHandles = () => {
  * delete the row at idx from table
  */
 const deleteRow = async (idx: number) => {
-    const { selectorFields, selected, data, total, confirmDeleteRow } = datatable.state;
-    const dexieTable = datatable.state.dexieTable as Table;
+    const { dexieTable, selectorFields, selected, data, total, confirmDeleteRow } =
+        datatable.state;
+    if (!dexieTable) return;
     const pk = rowSelectorPrimKey(selectorFields, data[idx]);
+    const stringFormatter = new ValueFormatter('string');
     const pk_str = stringFormatter.render(pk, t.getType(pk));
     const msg = `Sure to delete the row for primaryKey: ${pk_str}`;
     if (!confirmDeleteRow || window.confirm(msg)) {
@@ -762,10 +783,10 @@ const deleteRow = async (idx: number) => {
 const editRow = (idx: number) => {
     const { selectorFields, data } = datatable.state;
     const dataRow = data[idx];
-    const editSelector = rowSelectorPrimKey(selectorFields, dataRow);
+    const rowSelector = rowSelectorPrimKey(selectorFields, dataRow);
     const code = editRowCode(dataRow, selectorFields);
 
-    datatable.update({ editSelector });
+    datatable.update({ rowSelector });
     jsCodearea.update({
         enabled: true,
         code,
@@ -775,7 +796,7 @@ const editRow = (idx: number) => {
     appStore.rerender();
 };
 
-const editRowCode = (dataRow: PlainObject, selectorFields: string[]) => {
+const editRowCode = (dataRow: UnknownRecord, selectorFields: string[]) => {
     const { columns, dexieTable } = datatable.state;
     const hasUnnamedPK = dexieTable && isPrimKeyUnnamed(dexieTable.schema.primKey);
     let code: string;
@@ -807,7 +828,7 @@ const editRowCode = (dataRow: PlainObject, selectorFields: string[]) => {
     return code;
 };
 const editObjectItems = (
-    dataRow: PlainObject,
+    dataRow: UnknownRecord,
     selectorFields: string[],
     columns: Column[],
     forSelector: boolean,
@@ -828,11 +849,12 @@ const editObjectItems = (
 };
 const editValue = (name: string, val: unknown) => {
     const type = t.getType(val) as (typeof t.typesFromRow)[number];
+    const sourceFormatter = new ValueFormatter('source');
     return t.typesFromRow.includes(type)
         ? editValueFromRow(name)
         : sourceFormatter.render(val, type);
 };
-const editKey = (selectorFields: string[], dataRow: PlainObject) => {
+const editKey = (selectorFields: string[], dataRow: UnknownRecord) => {
     return selectorFields.length === 1
         ? editValue(selectorFields[0], dataRow[selectorFields[0]])
         : `[${selectorFields.map((name) => editValue(name, dataRow[name])).join(', ')}]`;
@@ -844,26 +866,79 @@ const editValueFromRow = (name: string) => {
 /**
  * click handler to select/deselect table rows, or to edit/delete the datasets
  */
-const tbodyClicked = (event: Event) => {
-    const target = event.target as HTMLElement;
+const tbodyClicked = (event: MouseEvent) => {
+    const target = event.target as Element;
     const tr = target.closest('tr');
-    if (tr === null || target.nodeName === 'A') {
+    const td = target.closest('td');
+    if (target.nodeName === 'A' || tr === null || td === null) {
         return;
     }
-    const idx = parseInt(tr.dataset.rowindex || '');
-    if (Number.isNaN(idx)) {
+    const idx = tr.rowIndex - 1;
+    if (idx < 0) {
         return;
     }
-    if (target.closest('td')?.classList.contains('row-icons')) {
+    if (td.classList.contains('row-icons')) {
         if (target.closest('button')?.classList.contains('delete')) {
             deleteRow(idx);
         } else {
             editRow(idx);
         }
-    } else {
-        tr.classList.toggle('hilight');
-        toggleSelected(idx);
+    } else if (td.classList.contains('editable')) {
+        const span = td.firstElementChild;
+        if (
+            span instanceof HTMLSpanElement &&
+            editValueIconClicked(span, event.clientX)
+        ) {
+            const rect = valueContainerRect(span);
+            const xOffset = td.classList.contains('aright') ? 15 : 5;
+            const anchorPosition = {
+                x: rect.right + xOffset,
+                y: (rect.top + rect.bottom) / 2,
+            };
+            const absent = span.dataset.absent === '1';
+            editCellValue(tr.rowIndex - 1, td.cellIndex, anchorPosition, absent);
+        } else {
+            tr.classList.toggle('hilight');
+            toggleSelected(idx);
+        }
     }
+};
+
+const editValueIconClicked = (span: HTMLElement, x: number) => {
+    const iconWidth = 17;
+    const rect = valueContainerRect(span);
+    return x >= rect.right && x <= rect.right + iconWidth;
+};
+
+const valueContainerRect = (span: HTMLElement) => {
+    const hasPreview = span.firstElementChild?.classList.contains('preview-wrapper');
+    return hasPreview
+        ? span.firstElementChild!.getBoundingClientRect()
+        : span.getBoundingClientRect();
+};
+
+const editCellValue = (
+    rowIndex: number,
+    cellIndex: number,
+    anchorPosition: Position,
+    absent: boolean,
+) => {
+    const { data, columns, target, selectorFields } = datatable.state;
+    const column = visibleColumns(columns)[cellIndex].name;
+    const value = structuredClone(data[rowIndex][column]);
+    const rowSelector = rowSelectorPrimKey(selectorFields, data[rowIndex]);
+    datatable.update({ rowSelector });
+    displayValueEditor({
+        target,
+        selectorFields,
+        rowSelector,
+        requireVariables: () => codeareaRequireVariables(datatable.state),
+        fieldName: columns[cellIndex].name,
+        innerValue: columns[cellIndex].innerValue,
+        value,
+        absent,
+        anchorPosition,
+    });
 };
 
 /**
@@ -893,7 +968,7 @@ const editableColumns = (columns: Column[]) =>
 const headlineView = (table: KTable) => {
     return html`
         Table
-        <i>${table.name}</i>
+        <i>${escapeUnicode(table.name)}</i>
         has ${table.count} record${table.count === 1 ? '' : 's'} in total
     `;
 };
@@ -904,7 +979,7 @@ const datatableView = (tstate: DatatableState) => {
     if (firstrun) return;
     const visColumns = visibleColumns(columns);
     const dtrows: TemplateResult[] = [];
-    data.forEach((rdata, idx) => dtrows.push(rowView(rdata, idx, visColumns, tstate)));
+    data.forEach((rdata) => dtrows.push(rowView(rdata, visColumns, tstate)));
     const twidth = tableWidth(visColumns) + 42; // 42: row icons column
     const awidth = appWindow.dims.width - 20; // 20: app section padding
     const width =
@@ -933,31 +1008,43 @@ const datatableView = (tstate: DatatableState) => {
     `;
 };
 
+/**
+ * called after the table is rendered into the DOM, so that,
+ * depending on the width, css classes can be added to the table cells
+ */
+const prepareDatatable = () => {
+    setTimeout(() => {
+        const tds = appWindow.root.querySelectorAll('table.datatable td.editable');
+        tds.forEach((td) => {
+            const span = td.firstElementChild;
+            if (span instanceof HTMLSpanElement === false) return;
+            const hasPreview = !!span.querySelector('div.preview-box');
+            const isOverflowing = span.offsetWidth > td.clientWidth - 19;
+            td.classList[isOverflowing && !hasPreview ? 'add' : 'remove']('oright');
+        });
+    }, 0);
+};
+
 const colHeaderView = (columns: Column[], order: string, direction: Direction) => {
     const cells = [];
-    columns.forEach((c, idx) => {
+    columns.forEach((column) => {
         const content =
-            order === c.name
+            order === column.name
                 ? html`<div class=th-container>
-                     <div class=th-title>${c.name}</div>
+                     <div class=th-title>${column.name}</div>
                      <div class=th-icon>${direction === 'asc' ? '▽' : '△'}</div>
                    </div`
                 : html`
-                      ${c.name}
+                      ${column.name}
                   `;
         cells.push(html`
             <th
-                width="${c.width}px"
+                width="${column.width}px"
                 @dblclick=${unsetOrder}
                 @mouseenter=${onMouseOverHeader.bind(null, 'visible')}
                 @mouseleave=${onMouseOverHeader.bind(null, 'hidden')}
             >
-                <a
-                    title="change sort order"
-                    tabindex="0"
-                    @click=${onColumnClicked}
-                    data-colindex=${idx}
-                >
+                <a title="change sort order" tabindex="0" @click=${onColumnClicked}>
                     ${content}
                 </a>
             </th>
@@ -1091,25 +1178,25 @@ const headerResizeHandles = (columns: Column[], resizeIndex?: number) => {
     return handles;
 };
 
-const rowView = (
-    rdata: PlainObject,
-    idx: number,
-    columns: Column[],
-    tstate: DatatableState,
-) => {
+const rowView = (rdata: UnknownRecord, columns: Column[], tstate: DatatableState) => {
     const cells: TemplateResult[] = [];
     columns.forEach((col) => {
         let value: TemplateResult | string = '',
-            type: AllowedType = 'string';
+            type: AllowedType = 'string',
+            absent;
         if (Object.hasOwn(rdata, col.name)) {
             type = t.getType(rdata[col.name]);
             value = display(rdata[col.name], type, {
                 format: col.format,
                 previewSize: tstate.previewSize,
             });
+        } else {
+            absent = '1';
         }
         cells.push(html`
-            <td class=${cellClasses(type) || nothing}>${value}</td>
+            <td class=${cellClasses(type, col.name) || nothing}>
+                <span data-absent="${absent ?? nothing}">${value}</span>
+            </td>
         `);
     });
     cells.push(html`
@@ -1118,12 +1205,15 @@ const rowView = (
     const selector = rowSelector(tstate.selectorFields, rdata);
     const trclass = tstate.selected.has(selector) ? 'hilight' : '';
     return html`
-        <tr data-rowindex=${idx} class=${trclass || nothing}>${cells}</tr>
+        <tr class=${trclass || nothing}>${cells}</tr>
     `;
 };
 
-const cellClasses = (type: AllowedType) => {
+const cellClasses = (type: AllowedType, name: string) => {
     const classes = [];
+    if (name !== '*key*') {
+        classes.push('editable');
+    }
     if (['number', 'bigint'].includes(type)) {
         classes.push('aright', 'colored-number');
     } else if (type === 'string') {
@@ -1283,57 +1373,83 @@ const settingsConfigClicked = () => {
 
 const onQueryResult = async (message: Message) => {
     if (message.type === 'queryResult') {
-        processQueryResult(message.result);
+        processQueryResult(structuredClone(message.result));
     }
 };
 
 const processQueryResult = async (payload: QueryResultMessagePayload) => {
-    const result = payload.encoded ? structuredClone(payload) : payload;
-    if (result.encoded === true) {
-        result.data = decodeQueryResult(result.data);
+    if (payload.encoded === true) {
+        payload.data = decodeQueryResult(payload.data);
     }
-    const ready = await datatable.setData(result);
+    payload = sanitizeQueryPayload(payload);
+    const ready = await datatable.setData(payload);
     if (ready) {
+        requestAnimationFrame(() => appWindow.main.scrollTo(datatable.state.scrollPos));
         appStore.update({ loading: false, loadingMsg: '', loadingStop: null });
+        prepareDatatable();
     }
+};
+
+const sanitizeQueryPayload = (payload: QueryResultMessagePayload) => {
+    let cnt = 0;
+    // this has happened on chrome for rows containing RTCCerticate values
+    payload.data = payload.data.filter((row) => {
+        if (row === null) cnt++;
+        return row !== null;
+    });
+    payload.total -= cnt;
+
+    const displayWarning = !getHiddenMessagesOrigin().includes('incompleteQueryResult');
+    if (cnt > 0 && displayWarning) {
+        const s1 = cnt > 1 ? 's' : '';
+        const s2 = cnt > 1 ? '' : 's';
+        const content = `The displayed data is incomplete:
+No results were returned when querying ${cnt} data record${s1}.
+This may be because the dataset${s1} contain${s2} RTCCertificate values.`;
+        const checkbox = {
+            label: "don't show this message again for this origin",
+            '@change': hideMessageType.bind(null, 'incompleteQueryResult'),
+        };
+        messageStack.displayWarning(content, { checkbox });
+    }
+    return payload;
 };
 
 const onQueryError = (message: Message) => {
     if (message.type === 'queryError') {
-        const error = message.error;
         const errorText =
-            typeof error === 'string'
-                ? error
-                : `${error.name}: ${error.message.split('\n').shift()}`;
+            typeof message.error === 'string'
+                ? message.error
+                : message.error.message.split('\n').shift();
         messageStack.displayError(`Error querying data: ${errorText}`);
     }
 };
 
-const codeareaRequiredVariables = async (state: DatatableState) => {
+const codeareaRequireVariables = (state: DatatableState) => {
+    const { rowSelector, selectorFields, data } = state;
     return {
-        selectorFields: state.selectorFields,
-        selected: state.selected,
-        row: getEditRow(state),
+        selected: structuredClone(state.selected),
+        row: structuredClone(getEditRow({ rowSelector, selectorFields, data })),
     };
 };
 
 const getEditRow = ({
-    editSelector,
+    rowSelector,
     selectorFields,
     data,
 }: {
-    editSelector: unknown;
+    rowSelector: unknown;
     selectorFields: string[];
-    data: PlainObject[];
+    data: UnknownRecord[];
 }) => {
-    if (editSelector !== null) {
-        if (!Array.isArray(editSelector)) {
-            editSelector = [editSelector];
+    if (rowSelector !== undefined) {
+        if (!Array.isArray(rowSelector)) {
+            rowSelector = [rowSelector];
         }
         for (const row of data) {
             if (
                 selectorFields.every(
-                    (field, idx) => row[field] === (editSelector as Array<unknown>)[idx],
+                    (field, idx) => row[field] === (rowSelector as Array<unknown>)[idx],
                 )
             ) {
                 return row;
@@ -1346,7 +1462,7 @@ const codeareaExecuted = async () => {
     if (datatable.state.displayCodearea === false) {
         jsCodearea.disable();
     }
-    datatable.updateDatatable({});
+    datatable.reloadDatatable({});
 };
 
 const datatable = new Datatable();

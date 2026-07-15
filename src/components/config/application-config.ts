@@ -1,33 +1,41 @@
 /**
  * SPDX-License-Identifier: MPL-2.0
- * SPDX-FileCopyrightText: 2025 Lutz Brückner <dev@kahuna.rocks>
+ * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
 import { html, type TemplateResult } from 'lit-html';
 import { map } from 'lit/directives/map.js';
-import ApplicationConfigDefaults from './application-defaults.ts';
-import Config from './config.ts';
-import type { ControlInstance, ApplicationOptions, OptionName } from './types.ts';
-import appWindow from '../app-window.ts';
-import messageStack from '../messagestack.ts';
-import tooltip from '../tooltip.ts';
-import { button } from '../../lib/button.ts';
-import checkbox from '../../lib/checkbox.ts';
-import messenger from '../../lib/messenger.ts';
-import settings from '../../lib/settings.ts';
-import svgIcon from '../../lib/svgicon.ts';
-import textinput from '../../lib/textinput.ts';
-import { pickProperties } from '../../lib/utils.ts';
-import type { SettingSubject } from '../../lib/types/settings.ts';
-import { PlainObject } from '../../lib/types/common.ts';
+
+import ApplicationConfigDefaults from '#components/config/application-defaults';
+import Config from '#components/config/config';
+import type {
+    ControlInstance,
+    ApplicationOptions,
+    OptionName,
+} from '#components/config/types';
+import appWindow from '#components/app-window';
+import messageStack from '#components/messagestack';
+import tooltip from '#components/tooltip';
+import { button } from '#lib/button';
+import checkbox from '#lib/checkbox';
+import env from '#lib/environment';
+import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import messenger from '#lib/messenger';
+import settings from '#lib/settings';
+import svgIcon from '#lib/svgicon';
+import textinput from '#lib/textinput';
+import { downloadFile, pickByKeys } from '#lib/utils';
+import type { Message, SettingSubject, UnknownRecord } from '#types';
 
 type ApplicationConfigState = {
     defaults: ApplicationOptions;
     subject: SettingSubject;
 } & ApplicationOptions;
 
-const ApplicationConfig = class extends Config {
+export default class ApplicationConfig extends Config {
     #confirmReset = false;
+    #boundExportedSettings = this.exportedSettings.bind(this);
+    #boundImportedSettingsResult = this.importSettingsResult.bind(this);
     constructor({
         control,
         values,
@@ -40,13 +48,13 @@ const ApplicationConfig = class extends Config {
         const state: ApplicationConfigState = {
             ...values,
             defaults,
-            subject: 'application',
+            subject: 'globals',
         };
         super(control, state);
     }
-    static activate(control: ControlInstance) {
+    static async activate(control: ControlInstance) {
         if (control.isGlobal === false) {
-            return;
+            throw `Cannot activate ApplicationConfig if the config Target is not 'global'!`;
         }
         const { values, defaults } = ApplicationConfig.getSettings();
         if (!control.rememberedSettings) {
@@ -104,7 +112,7 @@ const ApplicationConfig = class extends Config {
         return html`
             ${this.selectOptionsView()} ${this.inputOptionsView()}
             ${this.checkboxOptionsView()} ${this.ignoreDatabasesView()}
-            ${this.resetView()}
+            ${this.exportImportView()} ${this.resetView()}
         `;
     }
     ignoreDatabasesView() {
@@ -129,7 +137,7 @@ const ApplicationConfig = class extends Config {
     }
     ignoredDatabaseNameView(name: string, index: number) {
         return html`
-            <i>${name}</i>
+            <i>${escapeUnicode(name)}</i>
             <span
                 title="click to remove"
                 @click=${this.removeIgnoredDatabase.bind(this, index)}
@@ -160,16 +168,11 @@ const ApplicationConfig = class extends Config {
         `;
     }
     resetView() {
-        if (this.isGlobal === false) {
-            return '';
-        }
-        const subject = 'globally';
         const resetCheckbox = checkbox({
-            label: `reset all settings to default values ${subject}`,
+            label: 'reset all settings to default values globally',
             '@change': this.toggleReset.bind(this),
             checked: this.#confirmReset,
         });
-
         let resetConfirmPanel: string | TemplateResult = '';
         if (this.#confirmReset) {
             const buttonYes = button({
@@ -190,9 +193,33 @@ const ApplicationConfig = class extends Config {
             `;
         }
         return html`
-            <hr />
             <p><span>${resetCheckbox}</span></p>
             ${resetConfirmPanel}
+        `;
+    }
+    exportImportView() {
+        const buttonExport = button({
+            content: 'export settings',
+            title: 'export settings in dexie format',
+            '@click': this.exportSettings.bind(this),
+        });
+        const buttonImport = button({
+            content: html`
+                <label>import settings</label>
+                <input
+                    type="file"
+                    id="import-file"
+                    @change=${this.importSettings.bind(this)}
+                    accept=".dexie"
+                    class="hidden"
+                />
+            `,
+            title: 'import settings from file',
+            '@click': this.clickImportSettingsFileInput.bind(this),
+        });
+        return html`
+            <hr />
+            <p class="settings-export-import">${buttonExport} ${buttonImport}</p>
         `;
     }
     colorSchemeChanged(name: OptionName, event: Event) {
@@ -209,10 +236,8 @@ const ApplicationConfig = class extends Config {
         this.render();
     }
     resetYes() {
-        settings.reset(this.target);
-        messageStack.displayInfo(
-            `All settings for the origin ${window.location.origin} have been deleted.`,
-        );
+        messenger.post({ type: 'resetSettings', target: this.target });
+        messageStack.displayInfo(`All settings have been reset.`);
         this.toggleReset();
         messenger.post({ type: 'reloadApp' });
     }
@@ -243,7 +268,7 @@ const ApplicationConfig = class extends Config {
     addIgnoredDatabaseReady(event: Event) {
         tooltip.close();
         const target = event.target as HTMLInputElement;
-        const name = target.value.trim();
+        const name = unescapeUnicode(target.value.trim());
         if (
             name.length > 0 &&
             Array.isArray(this.state.ignoreDatabases) &&
@@ -253,30 +278,68 @@ const ApplicationConfig = class extends Config {
             this.saveSettings();
         }
     }
-    setDefaults() {
+    exportSettings() {
+        messenger.register('exportedSettings', this.#boundExportedSettings);
+        messenger.post({ type: 'exportSettings' });
+    }
+    async exportedSettings(msg: Message) {
+        if (msg.type === 'exportedSettings') {
+            downloadFile(msg.data, 'kahuna-settings.dexie', 'application/dexie');
+            messenger.unregister('exportedSettings', this.#boundExportedSettings);
+        }
+    }
+    clickImportSettingsFileInput(event: Event) {
+        const target = event.target;
+        if (target instanceof HTMLElement && !(target instanceof HTMLInputElement)) {
+            const input = target.closest('button')?.querySelector('input');
+            if (input) input.click();
+        }
+    }
+    importSettings(event: Event) {
+        const target = event.target;
+        if (target instanceof HTMLInputElement && target.files?.length === 1) {
+            const dataSrc = env.isFirefox
+                ? target.files[0]
+                : URL.createObjectURL(target.files[0]);
+            messenger.register('importSettingsResult', this.#boundImportedSettingsResult);
+            messenger.post({ type: 'importSettings', dataSrc });
+        }
+    }
+    importSettingsResult(msg: Message) {
+        if (msg.type === 'importSettingsResult') {
+            if ('error' in msg) {
+                messageStack.displayError(msg.error.message);
+            } else {
+                messageStack.displayInfo('The settings data has been imported.');
+            }
+            messenger.unregister(
+                'importSettingsResult',
+                this.#boundImportedSettingsResult,
+            );
+        }
+    }
+    override setDefaults() {
         super.setDefaults();
         appWindow.setColorScheme();
         appWindow.setColors();
     }
-    undoChanges() {
+    override undoChanges() {
         super.undoChanges();
         appWindow.setColorScheme();
         appWindow.setColors();
     }
-    saveSettings() {
-        const values = pickProperties(this.state, Object.keys(this.state.defaults));
+    override saveSettings() {
+        const values = pickByKeys(this.state, this.state.defaults);
         settings.saveGlobals(values);
         this.render();
     }
     static getSettings() {
         const defaults = ApplicationConfigDefaults();
-        const values: PlainObject = {};
+        const values: UnknownRecord = {};
         for (const key of Object.keys(defaults)) {
             const setting = settings.global(key as keyof ApplicationOptions);
             values[key] = setting;
         }
         return { values: structuredClone(values as ApplicationOptions), defaults };
     }
-};
-
-export default ApplicationConfig;
+}
