@@ -1,3 +1,7 @@
+# v1.6.1
+- released on 2026/07/22
+- bugfix: ensure that when editing data values, the correct column is updated, even if there are hidden columns.
+
 # v1.6.0
 - released on 2026/07/14
 - added a Value Editor component. All 44 data types supported by IndexedDB can now be edited in forms, manipulated via JavaScript, and/or replaced by uploading data.

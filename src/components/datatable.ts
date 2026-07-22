@@ -924,8 +924,8 @@ const editCellValue = (
     absent: boolean,
 ) => {
     const { data, columns, target, selectorFields } = datatable.state;
-    const column = visibleColumns(columns)[cellIndex].name;
-    const value = structuredClone(data[rowIndex][column]);
+    const column = visibleColumns(columns)[cellIndex];
+    const value = structuredClone(data[rowIndex][column.name]);
     const rowSelector = rowSelectorPrimKey(selectorFields, data[rowIndex]);
     datatable.update({ rowSelector });
     displayValueEditor({
@@ -933,8 +933,8 @@ const editCellValue = (
         selectorFields,
         rowSelector,
         requireVariables: () => codeareaRequireVariables(datatable.state),
-        fieldName: columns[cellIndex].name,
-        innerValue: columns[cellIndex].innerValue,
+        fieldName: column.name,
+        innerValue: column.innerValue,
         value,
         absent,
         anchorPosition,
