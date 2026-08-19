@@ -1,3 +1,7 @@
+# v1.6.2
+- released on 2026/08/19
+- bugfix: the data and database import in Dexie format was fixed for Firefox browser.
+
 # v1.6.1
 - released on 2026/07/22
 - bugfix: ensure that when editing data values, the correct column is updated, even if there are hidden columns.

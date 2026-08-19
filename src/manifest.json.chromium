@@ -1,7 +1,7 @@
 {
     "name": "Kahuna, the IndexedDB-Manager",
     "short_name": "Kahuna",
-    "version": "1.6.1",
+    "version": "1.6.2",
     "description": "Browse, manage and edit IndexedDB databases.",
     "author":"Lutz Brückner",
     "homepage_url":"https://github.com/hummingme/kahuna#readme",

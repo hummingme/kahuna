@@ -1,6 +1,6 @@
 {
   "name": "kahuna",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Browser-extension to view, edit, manage, export and import IndexedDB databases.",
   "author": "Lutz Brückner <dev@kahuna.rocks>",
   "license": "MPL-2.0",

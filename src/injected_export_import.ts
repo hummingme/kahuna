@@ -49,8 +49,8 @@ async function doImport(args: InjectedImportArgs) {
     let error = undefined;
     try {
         const response = await fetch(fileUrl);
-        URL.revokeObjectURL(fileUrl);
         const file = await response.blob();
+        URL.revokeObjectURL(fileUrl);
         if (usage === 'origin') {
             await importDB(file, options);
         } else {
