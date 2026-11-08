@@ -3,12 +3,12 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { escapeUnicode } from '#lib/escape-unicode';
+import { symbolButton } from '#components/parts/button';
+import { print } from '#lib/escape-string';
 import { downloadFile } from '#lib/utils';
-import { symbolButton } from '#lib/button';
 
 export default function saveFileIcon(file: File) {
-    const title = `save ${escapeUnicode(file.name)} as file`;
+    const title = `save file ${print(file.name)}`;
     return symbolButton({
         icon: 'tabler-device-floppy',
         title,

@@ -10,7 +10,6 @@ import Field, { type UpdateOptions } from '#components/value-editor/fields/field
 import { copyArrayBuffer } from '#components/value-editor/converter';
 import textInput from '#components/value-editor/text-input';
 import { validatePositiveInteger } from '#components/value-editor/validations';
-import type { RequiredVariables } from '#components/js-codearea';
 import { isArrayBuffer, isTypedArray } from '#lib/datatypes';
 import { isLarge } from '#lib/datatype-attributes';
 import {
@@ -18,6 +17,12 @@ import {
     formatterOptions,
     type FormatterOptions,
 } from '#lib/value-formatter';
+import {
+    RequiredVariables,
+    BUFFER_MAX_LENGTH,
+    VERY_LARGE_VALUE,
+    RememberedValue,
+} from '#types';
 
 export default class ArraybufferField extends Field {
     nodeByteLength: Ref<HTMLInputElement> = createRef();
@@ -32,31 +37,29 @@ export default class ArraybufferField extends Field {
         await super.init(requireVariables);
         this.buffer = this.value;
     }
-    view() {
+    formView() {
         const { byteLength, maxByteLength } = this.value;
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(this, {
-                        id: 'bytelength',
-                        '.value': String(byteLength),
-                        size: 11,
-                        maxLength: 12,
-                        label: 'byteLength',
-                        refVar: this.nodeByteLength,
-                    })}
-                    ${textInput(this, {
-                        id: 'maxbytelength',
-                        '.value':
-                            maxByteLength !== byteLength ? String(maxByteLength) : '',
-                        size: 11,
-                        maxLength: 12,
-                        label: 'maxByteLength',
-                        refVar: this.nodeMaxByteLength,
-                    })}
-                </div>
-                ${this.inputMethodView()}
-            </div>
+            ${textInput(this, {
+                id: this.valueInputId('bytelength'),
+                '.value': String(byteLength),
+                type: 'number',
+                min: 0,
+                max: BUFFER_MAX_LENGTH,
+                style: 'width: 13ch;',
+                label: 'byteLength',
+                refVar: this.nodeByteLength,
+            })}
+            ${textInput(this, {
+                id: this.valueInputId('maxbytelength'),
+                '.value': maxByteLength !== byteLength ? String(maxByteLength) : '',
+                type: 'number',
+                min: 0,
+                max: BUFFER_MAX_LENGTH,
+                style: 'width: 13ch',
+                label: 'maxByteLength',
+                refVar: this.nodeMaxByteLength,
+            })}
         `;
     }
     get value(): ArrayBuffer {
@@ -84,21 +87,18 @@ export default class ArraybufferField extends Field {
     }
     fromFormValue(): ArrayBuffer | undefined {
         const fieldValues = this.valuesFromForm();
-        if (fieldValues) {
-            const { byteLength, maxByteLength, resizable } = fieldValues;
-            let buffer = this.buffer;
-            if (
-                byteLength !== buffer.byteLength ||
-                maxByteLength !== buffer.maxByteLength
-            ) {
-                const options = resizable ? { maxByteLength } : {};
-                buffer = copyArrayBuffer(
-                    this.buffer,
-                    new ArrayBuffer(byteLength, options),
-                ) as ArrayBuffer;
-            }
-            return buffer;
+        if (!fieldValues) return;
+
+        const { byteLength, maxByteLength, resizable } = fieldValues;
+        let buffer = this.buffer;
+        if (byteLength !== buffer.byteLength || maxByteLength !== buffer.maxByteLength) {
+            const options = resizable ? { maxByteLength } : {};
+            buffer = copyArrayBuffer(
+                this.buffer,
+                new ArrayBuffer(byteLength, options),
+            ) as ArrayBuffer;
         }
+        return buffer;
     }
     valuesFromForm():
         | { byteLength: number; maxByteLength: number; resizable: boolean }
@@ -117,8 +117,12 @@ export default class ArraybufferField extends Field {
     validate() {
         let valid = false;
         const maxByteLengthNode = this.nodeMaxByteLength.value as HTMLInputElement;
-        const byteLength = validatePositiveInteger(this.nodeByteLength.value);
-        const maxByteLength = validatePositiveInteger(this.nodeMaxByteLength.value);
+        const byteLength = validatePositiveInteger(this.nodeByteLength.value, {
+            max: BUFFER_MAX_LENGTH,
+        });
+        const maxByteLength = validatePositiveInteger(this.nodeMaxByteLength.value, {
+            max: BUFFER_MAX_LENGTH,
+        });
         if (typeof byteLength === 'number' && typeof maxByteLength === 'number') {
             if (maxByteLength === 0 && maxByteLengthNode.value.trim() === '') {
                 valid = true;
@@ -132,6 +136,18 @@ export default class ArraybufferField extends Field {
         }
         this.valid = valid;
     }
+    valueChanged(remembered: RememberedValue) {
+        const oldValue = remembered.value;
+        if (!(oldValue instanceof ArrayBuffer)) return true;
+
+        const fieldValues = this.valuesFromForm();
+        if (!fieldValues) return false;
+
+        const { byteLength, maxByteLength } = fieldValues;
+        return (
+            byteLength !== oldValue.byteLength || maxByteLength !== oldValue.maxByteLength
+        );
+    }
     override update(value: ArrayBufferLike, options?: UpdateOptions) {
         super.update(value, options);
         this.toFormValue();
@@ -142,14 +158,14 @@ export default class ArraybufferField extends Field {
             buffer = structuredClone(buffer);
         }
         if (this.codearea) {
-            this.state.codeOptions.expanded = buffer.byteLength < isLarge('arraybuffer');
+            this.codeOptions().compacted = buffer.byteLength >= isLarge('arraybuffer');
         }
         this.update(buffer);
     }
 
-    override toSourceValue(expanded: boolean): string {
-        if (!expanded) return 'return value;';
-        const options = this.formOptions({ expanded });
+    override toSourceValue(compacted: boolean): string {
+        if (compacted) return 'return value;';
+        const options = this.formOptions({ compacted });
         const bufferFunc = ArraybufferField.sourceFunction(this.value, options);
         return `return arrayBuffer();
             
@@ -174,5 +190,11 @@ ${bufferFunc}`;
     }
     isLarge() {
         return this.value.byteLength > isLarge(this.state.type);
+    }
+    override focus(): void {
+        super.focus(this.nodeByteLength.value);
+    }
+    override isVeryLargeValue(): boolean {
+        return this.value.byteLength >= VERY_LARGE_VALUE;
     }
 }

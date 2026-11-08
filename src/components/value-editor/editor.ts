@@ -10,10 +10,9 @@ import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import Field, { type ValueFieldArgs } from '#components/value-editor/fields/field';
 import { fieldFactory } from '#components/value-editor/field-factory';
-import TextareaInput from '#components/value-editor/textarea-input';
 import configLayer from '#components/configlayer';
-import { type RequiredVariables } from '#components/js-codearea';
 import messageStack from '#components/messagestack';
+import { selectbox } from '#components/parts/selectbox';
 import { getConnection } from '#lib/connection';
 import {
     datatypeAttributes,
@@ -22,13 +21,19 @@ import {
     methodNames,
 } from '#lib/datatype-attributes';
 import { getType } from '#lib/datatypes';
-import { collectionToArray, isPrimKeyUnnamed } from '#lib/dexie-utils';
+import { collectionToArray, isPrimKeyUnnamed, pkToString } from '#lib/dexie-utils';
 import messenger from '#lib/messenger';
 import { rowSelectorFields } from '#lib/row-selection';
-import { selectbox } from '#lib/selectbox';
 import { setPath } from '#lib/utils';
-import { type AllowedType, ValueFormatter } from '#lib/value-formatter';
-import type { AppTarget, Position, RecordOf } from '#types';
+import { type AllowedType } from '#lib/value-formatter';
+import type {
+    AppTarget,
+    ColumnFormat,
+    Position,
+    RecordOf,
+    RememberedValue,
+    RequiredVariables,
+} from '#types';
 
 type ValueEditorArgs = {
     target: AppTarget;
@@ -39,15 +44,20 @@ type ValueEditorArgs = {
     innerValue: boolean;
     value: unknown;
     absent: boolean;
+    columnFormat: ColumnFormat;
     anchorPosition: Position;
 };
+
 type ValueEditorState = Omit<ValueEditorArgs, 'value' | 'absent'> & {
     type: AllowedType;
-    remembered: {
-        type: AllowedType;
-        value: unknown;
-        absent: boolean;
-    };
+    remembered: RememberedValue;
+};
+
+type CreateFieldArgs = {
+    type: AllowedType;
+    value: unknown;
+    absent: boolean;
+    columnFormat: ColumnFormat;
 };
 
 const state = Symbol('value-editor state');
@@ -58,22 +68,23 @@ const Editor = class {
     resetButton: Ref<HTMLButtonElement> = createRef();
     saveButton: Ref<HTMLButtonElement> = createRef();
     constructor(args: ValueEditorArgs) {
-        const { value, absent, ...forState } = args;
+        const { value, absent, columnFormat, ...forState } = args;
         const type = getType(args.value);
         this[state] = {
             ...forState,
             type,
+            columnFormat,
             remembered: {
                 value: structuredClone(args.value),
                 type,
                 absent: args.absent,
             },
         };
-        this.field = this.createField(type, value, absent);
+        this.field = this.createField({ type, value, absent, columnFormat });
     }
-    createField(type: AllowedType, value: unknown, absent: boolean): Field {
+    createField({ type, value, absent, columnFormat }: CreateFieldArgs): Field {
         const field = new Proxy<Field>(
-            fieldFactory(this.fieldArgs(type, value, absent)),
+            fieldFactory(this.fieldArgs({ type, value, absent, columnFormat })),
             this.fieldProxy,
         );
         return field;
@@ -82,19 +93,17 @@ const Editor = class {
         set: (field, prop, value) => {
             if (prop === 'valid') {
                 field.valid = value;
-                const newValue = this.field.state.formOptions.expanded
-                    ? this.field.fromFormValue()
-                    : this.field.value;
-                this.updateButtons(newValue, field.valid);
+                this.updateButtons(this.isValueChanged(field.value, field), field.valid);
                 return true;
             } else if (prop === 'value') {
                 field.value = value;
-                this.updateButtons(value, field.valid);
+                this.updateButtons(this.isValueChanged(value, field), field.valid);
                 return true;
             } else if (
                 prop === 'inputMethod' ||
                 prop === 'uploadCharset' ||
-                prop === 'downloadCharset'
+                prop === 'downloadCharset' ||
+                prop === 'datepickerType'
             ) {
                 this.setField(field, prop, value);
                 field.saveSettings();
@@ -102,7 +111,15 @@ const Editor = class {
             } else {
                 if (
                     typeof prop === 'string' &&
-                    ['valid', 'buffer', 'textarea', 'codearea'].includes(prop) === false
+                    [
+                        'buffer',
+                        'codearea',
+                        'datepickerType',
+                        'flexInput',
+                        'nodeInput',
+                        'nodeForm',
+                        'valid',
+                    ].includes(prop) === false
                 ) {
                     // eslint-disable-next-line no-console
                     console.error('fieldProxie got unexpected property', prop, value);
@@ -114,12 +131,10 @@ const Editor = class {
     setField<K extends keyof Field>(field: Field, prop: K, value: Field[K]) {
         field[prop] = value;
     }
-    fieldArgs(type: AllowedType, value: unknown, absent: boolean): ValueFieldArgs {
+    fieldArgs(args: CreateFieldArgs): ValueFieldArgs {
         const { fieldName, selectorFields, target } = this[state];
         return {
-            type,
-            value,
-            absent,
+            ...args,
             fieldName,
             selectorFields,
             target,
@@ -163,12 +178,13 @@ const Editor = class {
     }
     view() {
         const { type } = this[state];
+        const labelFor = this.field.valueLabelId() || nothing;
         return html`
             <div id="value-editor" ${ref(this.nodeReady.bind(this))}>
                 <h1 class="precis">${this.headline()}</h1>
                 <form id="value-form" @keydown=${this.keydownHandler.bind(this)}>
                     ${this.typeSelect(type)}
-                    <label for="field-value">value</label>
+                    <label for="${labelFor}">value</label>
                     ${this.field.view()} ${this.inputMethodSelect()}
                 </form>
             </div>
@@ -205,23 +221,12 @@ const Editor = class {
     }
     headline() {
         const { selectorFields, rowSelector, fieldName } = this[state];
-        const pkParts =
-            Array.isArray(rowSelector) === false || selectorFields.length === 1
-                ? [rowSelector]
-                : rowSelector;
-        const sourceFormatter = new ValueFormatter('source');
-        const pkString = pkParts
-            .map(
-                (val, idx) =>
-                    `${selectorFields[idx]} = ${sourceFormatter.render(val, getType(val))}`,
-            )
-            .join(' & ');
 
         return html`
             Edit value of:
             <em>${fieldName}</em>
             for primary key:
-            <em>${pkString}</em>
+            <em>${pkToString(selectorFields, rowSelector)}</em>
         `;
     }
     nodeReady(node?: Element) {
@@ -254,7 +259,7 @@ const Editor = class {
         const target = event.target;
         if (event.key == 'Enter') {
             if (
-                this.field.inputMethod === 'form' &&
+                this.field.usesFormInput() &&
                 this.field.valid &&
                 (target instanceof HTMLInputElement ||
                     target instanceof HTMLTextAreaElement ||
@@ -273,9 +278,10 @@ const Editor = class {
         const target = event.target as HTMLInputElement;
         const type = target.value as AllowedType;
         const value = this[state].type === 'undefined' ? undefined : this.field.value;
+        const columnFormat = this[state].columnFormat;
         this.field.shutdown();
 
-        this.field = this.createField(type, value, true);
+        this.field = this.createField({ type, value, absent: true, columnFormat });
         await this.initField(this.field);
         this.update({ type });
         this.field.focus();
@@ -294,29 +300,36 @@ const Editor = class {
         this.field.shutdown();
         const { type, value, absent } = structuredClone(this[state].remembered);
         this[state].type = type;
-        const field = (this.field = this.createField(type, value, absent));
-        await this.initField(field);
-        if ('textarea' in field && field.textarea instanceof TextareaInput) {
-            field.textarea.adjustField();
-        }
+        const columnFormat = this[state].columnFormat;
+        this.field = this.createField({ type, value, absent, columnFormat });
+        await this.initField(this.field);
         configLayer.render();
         this.updateResetButton(false);
         this.updateSaveButton(false);
     }
-    updateButtons(newValue: unknown, valid: boolean) {
-        const valueChanged = this.valueChanged(newValue);
+    updateButtons(valueChanged: boolean, valid: boolean) {
         this.updateResetButton(valueChanged);
         this.updateSaveButton(valid && valueChanged);
     }
-    valueChanged(value: unknown) {
-        const { value: valueOld, type: typeOld } = this[state].remembered;
-        const typeNow = getType(value);
-        if (typeNow === typeOld) {
-            const now = this.field.stringFormatter.render(value, typeNow);
-            const old = this.field.stringFormatter.render(valueOld, typeOld);
-            return now !== old;
+    isValueChanged(value: unknown, field: Field): boolean {
+        if ('valueChanged' in field && field.valueChanged instanceof Function) {
+            // some fields implement valueChanged() because
+            // calling field.fromFormValue() would be to slow for onInput
+            return field.valueChanged(this[state].remembered);
+        } else {
+            const valueNew =
+                field.inputMethod !== 'form' || field.formOptions().compacted
+                    ? value
+                    : field.fromFormValue();
+            const { value: valueOld, type: typeOld } = this[state].remembered;
+            const typeNew = getType(valueNew);
+            if (typeNew === typeOld) {
+                const now = field.stringFormatter.render(valueNew, typeNew);
+                const old = field.stringFormatter.render(valueOld, typeOld);
+                return now !== old;
+            }
+            return true;
         }
-        return true;
     }
     updateResetButton(enabled: boolean) {
         if (this.resetButton.value) {
@@ -434,9 +447,9 @@ const Editor = class {
     }
 };
 
-const displayValueEditor = async (args: ValueEditorArgs) => {
+function displayValueEditor(args: ValueEditorArgs) {
     if (args.fieldName === '*key*') return;
     new Editor(args).summon();
-};
+}
 
 export default displayValueEditor;

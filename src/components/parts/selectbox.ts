@@ -10,15 +10,15 @@ import { spread } from '@open-wc/lit-helpers';
 
 import { RecordOf } from '#types';
 
-interface SelectboxProps {
+type SelectboxProps = {
     options: RecordOf<string>;
     selected?: string;
     disabled?: string[];
     id?: string;
     tabIndex?: number;
-    refVar?: RefOrCallback;
+    refVar?: RefOrCallback | undefined;
     [key: string]: unknown;
-}
+};
 
 export const selectbox = (props: SelectboxProps) => {
     const { options, selected, disabled, tabIndex, refVar, ...attributes } = props;
@@ -33,25 +33,24 @@ export const selectbox = (props: SelectboxProps) => {
     `;
 };
 
-interface LabeledSelectboxProps extends SelectboxProps {
+type LabeledSelectboxProps = SelectboxProps & {
     label: string | TemplateResult;
     classes?: string;
-}
+};
 
 export const labeledSelectbox = (props: LabeledSelectboxProps) => {
     const { label, classes, ...sbProps } = props;
     return html`
-        <label for=${props.id} class=${props.classes ?? nothing}>
-            ${label} ${selectbox(sbProps)}
-        </label>
+        <label for=${props.id} class=${props.classes ?? nothing}>${label}</label>
+        ${selectbox(sbProps)}
     `;
 };
 
-interface LabeledNumbersSelectboxProps extends SelectboxProps {
+type LabeledNumbersSelectboxProps = SelectboxProps & {
     label: string;
     min: number;
     max: number;
-}
+};
 
 export const labeledNumbersSelectbox = (props: LabeledNumbersSelectboxProps) =>
     labeledSelectbox({ ...props, options: numbersObject(props.min, props.max) });

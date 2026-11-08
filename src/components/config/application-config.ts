@@ -6,24 +6,23 @@
 import { html, type TemplateResult } from 'lit-html';
 import { map } from 'lit/directives/map.js';
 
-import ApplicationConfigDefaults from '#components/config/application-defaults';
+import {
+    applicationDefaultOptions,
+    type ApplicationOptions,
+} from '#components/config/application-defaults';
 import Config from '#components/config/config';
-import type {
-    ControlInstance,
-    ApplicationOptions,
-    OptionName,
-} from '#components/config/types';
+import type { ControlInstance, OptionName } from '#components/config/types';
 import appWindow from '#components/app-window';
 import messageStack from '#components/messagestack';
 import tooltip from '#components/tooltip';
-import { button } from '#lib/button';
-import checkbox from '#lib/checkbox';
+import { button } from '#components/parts/button';
+import checkbox from '#components/parts/checkbox';
+import svgIcon from '#components/parts/svgicon';
+import textinput from '#components/parts/textinput';
 import env from '#lib/environment';
-import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import { print, unescapeString } from '#lib/escape-string';
 import messenger from '#lib/messenger';
 import settings from '#lib/settings';
-import svgIcon from '#lib/svgicon';
-import textinput from '#lib/textinput';
 import { downloadFile, pickByKeys } from '#lib/utils';
 import type { Message, SettingSubject, UnknownRecord } from '#types';
 
@@ -137,7 +136,7 @@ export default class ApplicationConfig extends Config {
     }
     ignoredDatabaseNameView(name: string, index: number) {
         return html`
-            <i>${escapeUnicode(name)}</i>
+            <i>${print(name)}</i>
             <span
                 title="click to remove"
                 @click=${this.removeIgnoredDatabase.bind(this, index)}
@@ -159,10 +158,11 @@ export default class ApplicationConfig extends Config {
             <div class="add-ignored">
                 <p>enter database name to ignore</p>
                 ${textinput({
-                    size: 15,
+                    id: 'ignore-db-name',
+                    classes: ['resizable'],
                     '@change': this.addIgnoredDatabaseReady.bind(this),
                     refVar: this.focusAddIgnoredInput,
-                })}
+                }).view()}
                 ${readyButton}
             </div>
         `;
@@ -268,7 +268,7 @@ export default class ApplicationConfig extends Config {
     addIgnoredDatabaseReady(event: Event) {
         tooltip.close();
         const target = event.target as HTMLInputElement;
-        const name = unescapeUnicode(target.value.trim());
+        const name = unescapeString(target.value.trim());
         if (
             name.length > 0 &&
             Array.isArray(this.state.ignoreDatabases) &&
@@ -334,7 +334,7 @@ export default class ApplicationConfig extends Config {
         this.render();
     }
     static getSettings() {
-        const defaults = ApplicationConfigDefaults();
+        const defaults = applicationDefaultOptions();
         const values: UnknownRecord = {};
         for (const key of Object.keys(defaults)) {
             const setting = settings.global(key as keyof ApplicationOptions);

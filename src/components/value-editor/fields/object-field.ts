@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { valueControlsTextareaView } from '#components/value-editor/view-utils';
+import { isFlexInputNode } from '#components/value-editor/flex-input';
 import Field, { type ValueFieldArgs } from '#components/value-editor/fields/field';
 import { jsonHint } from '#components/value-editor/hints';
 import messageStack from '#components/messagestack';
@@ -17,8 +17,9 @@ export default class ObjectField extends Field {
             this.inputMethod = 'form';
         }
     }
-    view() {
-        return valueControlsTextareaView(this);
+    formView() {
+        const value = this.toFormValue() || '';
+        return this.flexInput ? this.flexInput.view(value) : '';
     }
     set value(value: unknown) {
         let result: Record<string | number, unknown> = {};
@@ -49,11 +50,11 @@ export default class ObjectField extends Field {
         return this.stringFormatter.render(this.value, 'object', options);
     }
     fromFormValue(): object | undefined {
-        const textarea = this.node.value;
-        if (textarea instanceof HTMLTextAreaElement) {
+        const node = this.nodeInput;
+        if (isFlexInputNode(node)) {
             let value = {};
             try {
-                const parsed = JSON.parse(textarea.value);
+                const parsed = JSON.parse(node.value);
                 if (isPlainObject(value)) {
                     value = parsed;
                 }
@@ -64,10 +65,10 @@ export default class ObjectField extends Field {
     isFormEditable(value: unknown) {
         return !isPlainObject(value) || isJsonSerializable(value);
     }
-    validateTextareaValue(value: string) {
+    validate(value: string) {
         return isPlainObject(JSON.parse(value));
     }
-    invalidTextareaHint = 'The form value must be an object in json syntax!';
+    override invalidHint = 'The form value must be an object in json syntax!';
     override async handleUploadedValue(file: File) {
         let result: object | undefined;
         const { uploadCharset } = this.state;

@@ -5,30 +5,38 @@
 
 import { html } from 'lit-html';
 
+import svgIcon from '#components/parts/svgicon';
 import displayOptionsTooltip, {
     type OptionsUsage,
 } from '#components/value-editor/options-tooltip';
 import type Field from '#components/value-editor/fields/field';
-import svgIcon from '#lib/svgicon';
 
 export default function optionsIcon(field: Field, usage: OptionsUsage) {
     return html`
         <span
             title="configure the value format"
             class="value-icon"
-            @mouseover=${displayTooltip.bind(null, field, usage)}
+            @mouseenter=${(ev: MouseEvent) => scheduleTooltip(field, usage, ev)}
+            @mouseleave=${cancelTooltip}
         >
             ${svgIcon('tabler-adjustments-code')}
         </span>
     `;
 }
 
-function displayTooltip(field: Field, usage: OptionsUsage, event: MouseEvent) {
-    let anchor = event.target;
-    if (anchor instanceof SVGElement) {
-        anchor = anchor.closest('span');
-    }
-    if (anchor instanceof HTMLElement) {
-        displayOptionsTooltip(field, usage, anchor);
+let hoverTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleTooltip(field: Field, usage: OptionsUsage, event: MouseEvent) {
+    cancelTooltip();
+    const anchor = event.currentTarget;
+    if (!(anchor instanceof HTMLElement)) return;
+
+    hoverTimeout = setTimeout(() => displayOptionsTooltip(field, usage, anchor), 300);
+}
+
+function cancelTooltip() {
+    if (hoverTimeout !== null) {
+        clearTimeout(hoverTimeout);
+        hoverTimeout = null;
     }
 }

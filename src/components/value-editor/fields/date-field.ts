@@ -6,24 +6,28 @@
 import { html } from 'lit-html';
 
 import Field from '#components/value-editor/fields/field';
+import { dateToString } from '#components/value-editor/converter';
+import optionsIcon from '#components/value-editor/options-icon';
 import textInput from '#components/value-editor/text-input';
 import { isNumber } from '#lib/datatypes';
+import { datepickerAttributes } from '#lib/datepicker-types';
+import { addTimezoneOffset } from '#lib/timezone';
 
 export default class DateField extends Field {
-    view() {
-        const type = this.isFormOrCode() ? 'datetime-local' : 'number';
-        const step = this.isFormOrCode() ? '0.001' : undefined;
+    formView() {
+        const { datepickerType } = this.state;
+        const attribs =
+            this.isFormOrCode() && datepickerType
+                ? datepickerAttributes(datepickerType)
+                : {
+                      type: 'number',
+                      min: 0,
+                      style: `width: ${this.inputMethod === 'ts' ? '17' : '14'}ch;`,
+                  };
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(this, {
-                        id: 'field-value',
-                        type,
-                        step,
-                        size: undefined,
-                    })}
-                </div>
-                ${this.inputMethodView()}
+            <div class="form-wrapper">
+                <div>${textInput(this, attribs)}</div>
+                <div class="value-icons">${optionsIcon(this, 'form')}</div>
             </div>
         `;
     }
@@ -32,7 +36,7 @@ export default class DateField extends Field {
     }
     set value(value: unknown) {
         let result: Date = new Date();
-        if (value instanceof Date) {
+        if (this.isValidDate(value)) {
             result = value;
         } else if (typeof value === 'number' && Number.isInteger(value)) {
             result = new Date(value);
@@ -46,32 +50,37 @@ export default class DateField extends Field {
         this.state.value = result;
     }
     toFormValue(): string {
-        return this.isFormOrCode()
-            ? this.value.toISOString().slice(0, -1)
-            : this.inputMethod === 'ts'
-              ? String(this.value.getTime())
-              : String(Math.round(this.value.getTime() / 1000));
+        const { datepickerType } = this.state;
+        const useLocalTimezone = this.formatterMgr.getFormOptions().useLocalTimezone;
+        if (this.isFormOrCode() && datepickerType) {
+            return dateToString(this.value, datepickerType, useLocalTimezone);
+        }
+        return this.inputMethod === 'ts'
+            ? String(this.value.getTime())
+            : String(Math.round(this.value.getTime() / 1000));
     }
     fromFormValue(): Date | undefined {
-        if (this.node.value instanceof HTMLInputElement) {
-            const value = this.node.value.value;
-            return this.isFormOrCode()
+        if (this.nodeInput instanceof HTMLInputElement) {
+            const useLocalTimezone = this.formatterMgr.getFormOptions().useLocalTimezone;
+            const value = this.nodeInput.value;
+            const date = this.isFormOrCode()
                 ? new Date(`${value}Z`)
                 : this.inputMethod === 'ts'
                   ? new Date(parseInt(value))
                   : new Date(parseInt(value) * 1000);
+            return useLocalTimezone ? addTimezoneOffset(date) : date;
         }
     }
     validate() {
-        const input = this.node.value;
+        const input = this.nodeInput;
         if (input instanceof HTMLInputElement) {
             const value = this.fromFormValue();
             this.valid = this.isValidDate(value);
             input.setCustomValidity(this.valid ? '' : 'Please enter a valid date!');
         }
     }
-    isValidDate(value: Date | undefined) {
-        return value instanceof Date && !isNaN(value.getTime());
+    isValidDate(value: unknown): value is Date {
+        return value instanceof Date && !Number.isNaN(value.getTime());
     }
     isFormOrCode() {
         return this.inputMethod === 'form' || this.inputMethod === 'code';

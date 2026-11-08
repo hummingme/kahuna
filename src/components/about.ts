@@ -42,9 +42,10 @@ class About extends ModalWindow {
                             <p id="env-heading">Environment flags:</p>
                             <ul aria-labelledby="env-heading">
                                 <li>bigIntArrayFlaw: ${env.bigIntArrayFlaw}</li>
-
-                                <li>unsafeEval: ${env.unsafeEval}</li>
                                 <li>workersBlocked: ${env.workersBlocked}</li>
+                                <li>
+                                    codeExecution: ${env.codeExecutionMethods.join('; ')}
+                                </li>
                             </ul>
                         </div>
                     </div>

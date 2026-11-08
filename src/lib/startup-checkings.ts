@@ -11,9 +11,9 @@ import { hideMessageType, getHiddenMessagesOrigin } from './hidden-messages';
 import settings from '#lib/settings';
 
 const startupCheckings = () => {
-    if (env.codeExecution === false) {
-        displayNoCodeExecutionInfo();
-    }
+    // allow some time for env.codeExecution to initialize
+    setTimeout(checkDisplayNoCodeExecutionInfo, 500);
+
     const lastUpdateInfo = settings.global('lastUpdateInfo');
     if (
         lastUpdateInfo.length > 0 &&
@@ -26,8 +26,13 @@ const startupCheckings = () => {
         settings.saveGlobals({ lastUpdateInfo: env.version });
     }
 };
-const compareSemanticVersions = (v1: string, v2: string) => {
-    return v1.localeCompare(v2, undefined, { numeric: true });
+
+const checkDisplayNoCodeExecutionInfo = () => {
+    if (env.codeExecution === false) {
+        displayNoCodeExecutionInfo();
+        return true;
+    }
+    return false;
 };
 
 const displayNoCodeExecutionInfo = () => {
@@ -43,6 +48,10 @@ available on this origin.`;
         '@change': hideMessageType.bind(null, 'noCodeExecution'),
     };
     messageStack.displayInfo(content, { checkbox });
+};
+
+const compareSemanticVersions = (v1: string, v2: string) => {
+    return v1.localeCompare(v2, undefined, { numeric: true });
 };
 
 export default startupCheckings;

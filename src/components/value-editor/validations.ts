@@ -6,33 +6,46 @@
 import { isArgsNumbersList } from '#components/value-editor/checkings';
 import { isNumber } from '#lib/datatypes';
 
+type ValidatePositiveIntegerOptions = {
+    required?: boolean;
+    zeroIncluded?: boolean;
+    max?: number;
+};
+
 export function validatePositiveInteger(
-    input?: HTMLElement,
-    {
+    input: HTMLElement | undefined,
+    options: ValidatePositiveIntegerOptions = {},
+): number | null {
+    const {
         required = false,
         zeroIncluded = true,
-    }: {
-        required?: boolean;
-        zeroIncluded?: boolean;
-    } = {},
-) {
-    let result: number | null = null;
-    if (input instanceof HTMLInputElement) {
-        const value = input.value.trim();
-        if (value.length === 0 && required === false) {
-            input.setCustomValidity('');
-            return 0;
-        } else if (
-            isNumber(value) &&
-            parseInt(value) >= 0 &&
-            Number(value) === parseInt(value)
-        ) {
-            result = zeroIncluded || Number(value) > 0 ? Number(value) : null;
-        }
-        input.setCustomValidity(
-            result !== null ? '' : 'Please enter a valid positive integer!',
-        );
+        max = Number.POSITIVE_INFINITY,
+    } = options;
+    if (!(input instanceof HTMLInputElement)) {
+        return null;
     }
+    input.setCustomValidity('');
+    if (!input.validity.valid) {
+        return null;
+    }
+
+    const value = input.value.trim();
+    if (value.length === 0 && !required) {
+        input.setCustomValidity('');
+        return 0;
+    }
+    const numericValue = Number(value);
+    const isValidInteger =
+        isNumber(value) && Number.isInteger(numericValue) && numericValue >= 0;
+
+    let result: number | null = null;
+    if (isValidInteger && numericValue <= max && (zeroIncluded || numericValue > 0)) {
+        result = numericValue;
+    }
+    const maxHint = max < Number.POSITIVE_INFINITY ? ` no greater than ${max}` : '';
+    input.setCustomValidity(
+        result !== null ? '' : `Please enter a valid positive integer${maxHint}!`,
+    );
     return result;
 }
 

@@ -6,19 +6,21 @@
 import appWindow from '#components/app-window';
 import messenger from '#lib/messenger';
 import { manifestVersion } from '#lib/runtime';
+import { checkUnsafeEval } from './utils';
 import type { ExecutionMethod, Message } from '#types';
 
-interface EnvironmentValues {
+type EnvironmentValues = {
     version: string;
     manifestVersion: number;
     permissions: string[] | undefined;
     hostPermissions: string[] | undefined;
     unsafeEval: boolean;
     workersBlocked: boolean;
+    unsafeEvalWorker: boolean;
     preferedColorScheme: 'light' | 'dark';
     bigIntArrayFlaw: boolean;
     fileSystemApiSupported: boolean;
-}
+};
 
 class Environment {
     #env: EnvironmentValues = {
@@ -26,14 +28,15 @@ class Environment {
         manifestVersion: 2,
         permissions: [], // of extensions
         hostPermissions: [], //   "
-        unsafeEval: false, // unsafe eval expressions are blocked, typically due to Manifest 3
+        unsafeEval: false, // unsafe eval expressions are blocked, typically due to Manifest 3 or CSP
         workersBlocked: false, // no Worker can be started, typically due to CSP restrictions
+        unsafeEvalWorker: false, // unsafe eval is blocked in workers
         preferedColorScheme: 'light',
         bigIntArrayFlaw: true, // in Firefox, BigInt64Arrays are not accessible when sent from worker
         fileSystemApiSupported: false,
     };
     async init() {
-        this.#env.unsafeEval = this.checkUnsafeEval();
+        this.#env.unsafeEval = await checkUnsafeEval();
         this.#env.preferedColorScheme = this.checkPreferedColorScheme();
         this.#env.manifestVersion = manifestVersion;
         this.#env.fileSystemApiSupported = await this.checkFileSystemApiSuppport();
@@ -73,8 +76,14 @@ class Environment {
     get workersBlocked() {
         return this.#env.workersBlocked;
     }
+    get unsafeEvalWorker() {
+        return this.#env.unsafeEvalWorker;
+    }
     get preferedColorScheme() {
         return this.#env.preferedColorScheme;
+    }
+    get timeZone() {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone;
     }
     get bigIntArrayFlaw() {
         return this.#env.bigIntArrayFlaw;
@@ -97,7 +106,7 @@ class Environment {
         return methods;
     }
     executionMethodConditions = {
-        webworker: () => this.workersBlocked === false,
+        webworker: () => this.workersBlocked === false && this.unsafeEvalWorker === true,
         unsafeEval: () => this.unsafeEval === true,
         userscript: () => this.permissions?.includes('userScripts'),
     };
@@ -107,18 +116,6 @@ class Environment {
             return preferedMethod;
         }
         return availableMethods.shift();
-    }
-    checkUnsafeEval() {
-        try {
-            Function()();
-            return true;
-        } catch (error) {
-            if (error instanceof EvalError) {
-                return false;
-            } else {
-                throw error;
-            }
-        }
     }
     async checkFileSystemApiSuppport() {
         try {
@@ -142,6 +139,7 @@ class Environment {
             this.#env.bigIntArrayFlaw =
                 message.result.BigInt64Array?.length === undefined;
             messenger.unregister('checkFlawsResult', this.#boundCheckFlawsResult);
+            this.#env.unsafeEvalWorker = message.result.unsafeEvalWorker;
         }
     }
     #boundCheckFlawsResult = this.checkFlawsResult.bind(this);

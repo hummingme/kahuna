@@ -8,14 +8,9 @@ import { html } from 'lit-html';
 import Field from '#components/value-editor/fields/field';
 
 export default class NullField extends Field {
-    view() {
+    formView() {
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    <em>null</em>
-                    ${this.inputMethodView()}
-                </div>
-            </div>
+            <em>null</em>
         `;
     }
     get value() {

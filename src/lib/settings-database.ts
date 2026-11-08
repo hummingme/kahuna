@@ -13,29 +13,24 @@ import {
     SettingKey,
     SettingObject,
     SettingValues,
+    WidthObject,
 } from '#types';
 
 const DBNAME = 'kahuna settings';
-const DBVERSION = 3;
+const DBVERSION = 5;
 const DBSTORES = {
-    settings: '[database+table+subject]',
+    settings: null,
     settings2: '[database+table+subject+detail]',
+    textinputWidths: 'id',
 };
 const SETTINGS_TABLE = 'settings2';
 
 class SettingsDB extends Dexie {
-    settings!: Table<SettingObject, [string, string, string]>;
     settings2!: Table<SettingObject, [string, string, string, string]>;
+    textinputWidths!: Table<WidthObject, number>;
     constructor(dbName: string) {
         super(dbName);
-        this.version(DBVERSION)
-            .stores(DBSTORES)
-            .upgrade(async (tx) => {
-                const data = await tx.table('settings').toArray();
-                data.map((setting) => (setting.detail = ''));
-                tx.table('settings2').bulkAdd(data);
-                tx.table('settings').clear();
-            });
+        this.version(DBVERSION).stores(DBSTORES);
     }
 }
 
@@ -48,9 +43,13 @@ async function openSettingsDB() {
 }
 
 export const putSettings = async (data: SettingObject) => {
+    const table = (await openSettingsDB()).table(SETTINGS_TABLE);
     data.detail ??= ''; // the optional detail is part of the pk
-    const dbHandle = await openSettingsDB();
-    dbHandle.table(SETTINGS_TABLE).put(data);
+    if (!isEmptyObject(data.values)) {
+        table.put(data);
+    } else {
+        table.delete([data.database, data.table, data.subject, data.detail]);
+    }
 };
 
 export const getSettings = async (key: SettingKey): Promise<SettingValues> => {
@@ -86,7 +85,7 @@ export const clearSettings = async (target: AppTarget) => {
     if (isGlobal(target)) {
         const dbHandle = await openSettingsDB();
         dbHandle.table(SETTINGS_TABLE).clear();
-        dbHandle.table('settings').clear();
+        dbHandle.table('textinputWidths').clear();
     }
 };
 
@@ -106,11 +105,7 @@ export const importSettings = async (data: Blob) => {
                 'The uploaded file does not contain an export of a Kahuna settings database.',
             );
         }
-        if (
-            !meta.data.tables.some(
-                (t) => t.name === SETTINGS_TABLE || t.name === 'settings',
-            )
-        ) {
+        if (!meta.data.tables.some((t) => t.name === SETTINGS_TABLE)) {
             throw Error('The uploaded file does not contain Kahuna settings data.');
         }
         const dbHandle = await openSettingsDB();
@@ -151,3 +146,21 @@ export const getDatabaseTablesColumns = async (
         .filter((row: SettingObject) => row.subject === 'columns')
         .toArray();
 };
+
+export async function getTextinputWidths() {
+    const dbHandle = await openSettingsDB();
+    const widths = await dbHandle.textinputWidths.toArray();
+    return Object.fromEntries(widths.map(({ id, width }) => [id, width]));
+}
+
+export async function putTextinputWidth(width: WidthObject) {
+    const dbHandle = await openSettingsDB();
+    dbHandle.textinputWidths.put(width);
+}
+
+function isEmptyObject(value: unknown) {
+    return (
+        Object.prototype.toString.call(value) === '[object Object]' &&
+        Object.getOwnPropertyNames(value).length === 0
+    );
+}

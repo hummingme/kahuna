@@ -129,13 +129,6 @@ export const selfMap = (arr: readonly string[]): RecordOf<string> =>
 export const isSorted = (arr: number[]): boolean =>
     arr.slice(1).every((item, i) => arr[i] <= item);
 
-/*
- * replacement for Set.prototype.intersection()
- */
-export const hasIntersection = (a: Set<unknown>, b: Set<unknown>): boolean => {
-    return [...a].some((item) => b.has(item));
-};
-
 export const downloadFile = (bits: BlobPart, filename: string, type = ''): void => {
     const file = new File([bits], filename, { type });
     const link = document.createElement('a');
@@ -162,4 +155,17 @@ export const sleep = (delay: number) =>
 export const rowIndex = (node: HTMLElement) => {
     const tr = node.closest('tr');
     return tr && tr.rowIndex !== -1 ? tr.rowIndex - 1 : -1;
+};
+
+export const checkUnsafeEval = async () => {
+    try {
+        Function()();
+        return true;
+    } catch (error) {
+        if (error instanceof EvalError) {
+            return false;
+        } else {
+            throw error;
+        }
+    }
 };

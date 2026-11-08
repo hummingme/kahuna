@@ -4,59 +4,76 @@
  */
 
 import { html } from 'lit-html';
-import type { Ref } from 'lit/directives/ref.js';
+import type { RefOrCallback } from 'lit/directives/ref.js';
 
 import Field from '#components/value-editor/fields/field';
 import hintIcon from '#components/value-editor/hint-icon';
-import textinput from '#lib/textinput';
-import { type FieldInputMethod } from '#lib/datatype-attributes';
+import textinput from '#components/parts/textinput';
+import { TextinputProps } from '#types';
 
 type TextInputArgs = {
-    id: string;
+    id?: string;
     '.value'?: string | undefined | void;
-    size?: number | undefined;
+    style?: string | undefined;
+    classes?: string[];
     maxLength?: number | undefined;
     type?: string | undefined;
     step?: string | undefined;
-    refVar?: Ref<HTMLElement>;
+    min?: number | undefined;
+    max?: number | undefined;
+    refVar?: RefOrCallback;
     label?: string;
     list?: string | undefined;
     disabled?: boolean;
 };
-type TextInputProps = TextInputArgs & {
-    liveValue: boolean;
-    spellcheck: boolean;
-    '?disabled': boolean;
-    '@change': () => void;
-    '@input'?: () => void;
-};
 
-export default function textInput(field: Field, args: TextInputArgs, withHint?: boolean) {
-    const { id, maxLength, list, type, step } = args;
-    const size = 'size' in args ? args.size : 20;
-    const refVar = args.refVar || field.node;
+/**
+ * used by DateField, ArraybufferField, DataviewField, BlobField, CryptokeyField,
+ *         DomexceptionField, DommatrixreadonlyField, ErrorField, FileField,
+ *         FilesystemdirectoryhandleField, FilesystemfilehandleField,
+ *         ImagebitmapField, ImagedataField, RegexpField
+ */
+export default function textInput(
+    field: Field,
+    args: TextInputArgs = {},
+    withHint = false,
+) {
+    const { id, style, classes, maxLength, list, type, step, min, max } = args;
+    const refVar = args.refVar || field.setNodeInput;
     const disabled =
-        args.disabled ||
-        !isFormInput(field.inputMethod) ||
-        field.state.formOptions.expanded === false;
-    const props: TextInputProps = {
-        id,
+        args.disabled || !field.usesFormInput() || field.formOptions().compacted;
+
+    const validate =
+        'validate' in field && field.validate instanceof Function
+            ? field.validate.bind(field)
+            : undefined;
+
+    const handleFormChange = field.handleFormChange.bind(field);
+    const change = validate
+        ? () => {
+              validate();
+              handleFormChange();
+          }
+        : handleFormChange;
+
+    const props: TextinputProps = {
+        id: id ?? field.valueInputId(),
         '.value': '.value' in args ? args['.value'] : field.toFormValue(),
-        size,
+        style,
+        classes,
         maxLength,
         type,
         step,
+        min,
+        max,
         list,
         liveValue: true,
         spellcheck: false,
         '?disabled': disabled,
-        '@change': field.handleFormChange.bind(field),
+        '@change': change,
+        ...(validate && { '@input': validate }),
         refVar,
     };
-
-    if ('validate' in field && field.validate instanceof Function) {
-        props['@input'] = field.validate.bind(field);
-    }
 
     const icon = withHint && field.inputMethod === 'form' ? hintIcon(field, 'form') : '';
 
@@ -67,10 +84,6 @@ export default function textInput(field: Field, args: TextInputArgs, withHint?: 
         : '';
 
     return html`
-        <p>${textinput(props)} ${label}${icon}</p>
+        <p>${textinput(props).view()} ${label}${icon}</p>
     `;
-}
-
-function isFormInput(inputMethod: FieldInputMethod) {
-    return inputMethod === 'form' || inputMethod === 'ts' || inputMethod === 'ts/1000';
 }

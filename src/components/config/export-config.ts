@@ -6,14 +6,14 @@
 import { html } from 'lit-html';
 
 import Config from '#components/config/config';
+import { exportDefaultOptions, type ExportOptions } from './export-defaults';
 import type {
     ControlInstance,
-    ExportOptions,
     InputOption,
     Option,
     SelectOption,
 } from '#components/config/types';
-import infoIcon from '#lib/info-icon';
+import infoIcon from '#components/parts/info-icon';
 import settings from '#lib/settings';
 import { selfMap } from '#lib/utils';
 import { AppTarget, DATA_FORMATS, SettingSubject } from '#types';
@@ -59,11 +59,31 @@ export default class ExportConfig extends Config {
         },
     ];
     inputOptions: InputOption[] = [
-        { name: 'filenameDatabase', label: 'export database filename', size: 20 },
-        { name: 'filenameTable', label: 'export table data filename', size: 20 },
-        { name: 'filenameSelection', label: 'export selection data filename', size: 20 },
-        { name: 'primaryKeyName', label: 'primary key name', size: 15 },
-        { name: 'directValuesName', label: 'direct values name', size: 15 },
+        {
+            name: 'filenameDatabase',
+            label: 'export database filename',
+            id: 'export-config-filename-database',
+        },
+        {
+            name: 'filenameTable',
+            label: 'export table data filename',
+            id: 'export-config-filename-table',
+        },
+        {
+            name: 'filenameSelection',
+            label: 'export selection data filename',
+            id: 'export-config-filename-selection',
+        },
+        {
+            name: 'primaryKeyName',
+            label: 'primary key name',
+            id: 'export-config-pk-name',
+        },
+        {
+            name: 'directValuesName',
+            label: 'direct values name',
+            id: 'export-config-dv-name',
+        },
     ];
     view() {
         return html`
@@ -111,16 +131,3 @@ is left blank, rows with direct values will be excluded from the export.`;
         return exportDefaultOptions();
     }
 }
-
-export const exportDefaultOptions = () => {
-    return {
-        dataExportFormat: 'json', // FOR tables & selections, dexie|csv|json
-        filenameDatabase: '{db}-{date}-{time}.{format}',
-        filenameTable: '{table}-{date}-{time}.{format}',
-        filenameSelection: '{table}-part.{format}',
-        primaryKeyName: 'key', // for csv & json, if pk is unnamed
-        directValuesName: 'value', // for csv & json
-        prettyDexie: false, // all targets, all formats
-        prettyJSON: false, // all targets, all formats
-    };
-};

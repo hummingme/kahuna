@@ -34,7 +34,9 @@ type DatatypeAttributes = {
     isLarge?: number;
     compactedFrom?: number;
     compactedOnly?: boolean;
+    expandedOnly?: boolean;
     containsStrings?: boolean;
+    noValueLabelId?: boolean;
 };
 
 type DatatypeAttributesMap = {
@@ -67,13 +69,14 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             name: 'Date',
             group: 'base',
             inputMethods: new Set(['form', 'ts', 'ts/1000', 'code']),
+            expandedOnly: true,
         },
         map: {
             name: 'Map',
             group: 'base',
             inputMethods: new Set(['code', 'form']),
             itemsPerLine: 4,
-            isLarge: 500,
+            isLarge: 1000,
             compactedFrom: 100,
             containsStrings: true,
         },
@@ -81,17 +84,21 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             name: 'Null',
             group: 'base',
             inputMethods: FORM_CODE,
+            noValueLabelId: true,
         },
         number: {
             name: 'Number',
             group: 'base',
             inputMethods: FORM_CODE,
+            expandedOnly: true,
         },
         object: {
             name: 'Object',
             group: 'base',
             inputMethods: new Set(['code', 'form', 'json-upload']),
             containsStrings: true,
+            isLarge: 1000,
+            compactedFrom: 100,
         },
         set: {
             name: 'Set',
@@ -113,6 +120,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             name: 'Undefined',
             group: 'base',
             inputMethods: FORM_CODE,
+            noValueLabelId: true,
         },
 
         arraybuffer: {
@@ -122,6 +130,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             itemsPerLine: 16,
             isLarge: 4000,
             compactedFrom: 100,
+            noValueLabelId: true,
         },
         bigint64array: {
             name: 'BigInt64Array',
@@ -146,6 +155,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             itemsPerLine: 16,
             isLarge: 4000,
             compactedFrom: 100,
+            noValueLabelId: true,
         },
         float64array: {
             name: 'Float64Array',
@@ -240,6 +250,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             itemsPerLine: 16,
             isLarge: 2000,
             compactedFrom: 50,
+            noValueLabelId: true,
         },
         cryptokey: {
             name: 'CryptoKey',
@@ -252,6 +263,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             group: 'more',
             inputMethods: FORM_CODE,
             containsStrings: true,
+            noValueLabelId: true,
         },
         dommatrix: {
             name: 'DOMMatrix',
@@ -277,6 +289,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             name: 'DOMQuad',
             group: 'more',
             inputMethods: FORM_CODE,
+            noValueLabelId: true,
         },
         domrect: {
             name: 'DOMRect',
@@ -293,6 +306,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             group: 'more',
             inputMethods: FORM_CODE,
             containsStrings: true,
+            noValueLabelId: true,
         },
         file: {
             name: 'File',
@@ -302,6 +316,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             isLarge: 2000,
             compactedFrom: 50,
             containsStrings: true,
+            noValueLabelId: true,
         },
         filelist: {
             name: 'FileList',
@@ -309,6 +324,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             inputMethods: FORM_CODE,
             compactedOnly: true,
             containsStrings: true,
+            noValueLabelId: true,
         },
         filesystemdirectoryhandle: {
             name: 'FileSystemDirectoryHandle',
@@ -316,6 +332,7 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             inputMethods: FORM_CODE,
             compactedOnly: true,
             containsStrings: true,
+            noValueLabelId: true,
         },
         filesystemfilehandle: {
             name: 'FileSystemFileHandle',
@@ -323,16 +340,19 @@ export function datatypeAttributes(): DatatypeAttributesMap {
             inputMethods: FORM_CODE,
             compactedOnly: true,
             containsStrings: true,
+            noValueLabelId: true,
         },
         imagebitmap: {
             name: 'ImageBitmap',
             group: 'more',
             inputMethods: new Set(['image-upload', 'code']),
+            noValueLabelId: true,
         },
         imagedata: {
             name: 'ImageData',
             group: 'more',
             inputMethods: new Set(['image-upload', 'form', 'code']),
+            noValueLabelId: true,
         },
         regexp: {
             name: 'RegExp',
@@ -378,9 +398,8 @@ export function methodNames(type: AllowedType) {
     return names;
 }
 
-const codePossible = env.codeExecutionMethods.length > 0;
-
 export function inputMethods(type: AllowedType) {
+    const codePossible = env.codeExecutionMethods.length > 0;
     const attributes = datatypeAttributes()[type];
     if (!attributes) return [];
     const methods = attributes.inputMethods;
@@ -410,7 +429,11 @@ export function itemsPerLine(type: AllowedType) {
 
 export function isExpandable(type: AllowedType) {
     const attributes = datatypeAttributes()[type];
-    return typeof attributes === 'object' && !attributes.compactedOnly;
+    return (
+        typeof attributes === 'object' &&
+        !attributes.compactedOnly &&
+        !attributes.expandedOnly
+    );
 }
 
 export function containsStrings(type: AllowedType) {
@@ -434,4 +457,13 @@ export function isLarge(type: AllowedType): number {
         typeof attributes.isLarge === 'number'
         ? attributes.isLarge
         : 1;
+}
+
+export function noValueLabelId(type: AllowedType): boolean {
+    const attributes = datatypeAttributes()[type];
+    return typeof attributes === 'object' &&
+        'noValueLabelId' in attributes &&
+        typeof attributes.noValueLabelId === 'boolean'
+        ? attributes.noValueLabelId
+        : false;
 }

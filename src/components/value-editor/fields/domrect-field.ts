@@ -3,8 +3,6 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
-
 import Field from '#components/value-editor/fields/field';
 import {
     isArgsNumbersArray,
@@ -14,13 +12,8 @@ import textInput from '#components/value-editor/text-input';
 import { requiredArgumentsList } from '#lib/value-formatter';
 
 export default class DomrectField extends Field {
-    view() {
-        return html`
-            <div class="value-controls">
-                <div class="value">${textInput(this, { id: 'domrect-args' }, true)}</div>
-                ${this.inputMethodView()}
-            </div>
-        `;
+    formView() {
+        return textInput(this, { classes: ['resizable'] }, true);
     }
     get value(): DOMRect {
         return this.state.value as DOMRect;
@@ -61,8 +54,8 @@ export default class DomrectField extends Field {
     }
     argsFromField() {
         let args: number[] = [];
-        if (this.node.value instanceof HTMLInputElement) {
-            const value = this.node.value.value;
+        if (this.nodeInput instanceof HTMLInputElement) {
+            const value = this.nodeInput.value;
             if (isArgsNumbersList(value, 4)) {
                 args = value.split(',').map((arg) => Number(arg));
             }
@@ -70,7 +63,7 @@ export default class DomrectField extends Field {
         return args;
     }
     validate() {
-        const input = this.node.value;
+        const input = this.nodeInput;
         if (input instanceof HTMLInputElement) {
             this.valid = isArgsNumbersList(input.value, 4);
             const name = this.value instanceof DOMRect ? 'DOMRect' : 'DOMRectReadonly';

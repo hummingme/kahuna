@@ -3,12 +3,13 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import type { Collection, IndexSpec, Table } from 'dexie';
+import type { Collection, IndexableType, IndexSpec, Table } from 'dexie';
 
 import { getConnection } from '#lib/connection';
-import { isPlainObject } from '#lib/datatypes';
+import { getType, isPlainObject } from '#lib/datatypes';
 import { rowSelector, selectedPrimKeys } from '#lib/row-selection';
 import { addNestedValues, removeNestedValues } from '#lib/utils';
+import { ValueFormatter } from '#lib/value-formatter';
 import { KTable, UnknownRecord } from '#types';
 
 export const isPrimKeyUnnamed = (primKey: IndexSpec): boolean =>
@@ -90,9 +91,9 @@ export const tableIndexesSpec = (table: KTable) => {
     );
 };
 
-interface DataRow {
+type DataRow = {
     [key: string]: any;
-}
+};
 
 export const copyTableData = async (
     source: { table: string; database: string },
@@ -155,3 +156,18 @@ export const dexieExportFilter = (
         };
     }
 };
+
+export function pkToString(selectorFields: string[], rowSelector: IndexableType) {
+    const pkParts =
+        Array.isArray(rowSelector) === false || selectorFields.length === 1
+            ? [rowSelector]
+            : rowSelector;
+    const sourceFormatter = new ValueFormatter('source');
+    const pkString = pkParts
+        .map(
+            (val, idx) =>
+                `${selectorFields[idx]} = ${sourceFormatter.render(val, getType(val))}`,
+        )
+        .join(' & ');
+    return pkString;
+}

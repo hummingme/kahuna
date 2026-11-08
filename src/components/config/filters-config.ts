@@ -6,8 +6,12 @@
 import { html } from 'lit-html';
 
 import Config from '#components/config/config';
+import {
+    filtersDefaultOptions,
+    type FiltersOptions,
+} from '#components/config/filters-defaults';
 import FilterFieldsConfig from '#components/config/filter-fields-config';
-import type { ControlInstance, FiltersOptions, Option } from '#components/config/types';
+import type { ControlInstance, Option } from '#components/config/types';
 import settings from '#lib/settings';
 import { AppTarget, SettingSubject } from '#types';
 
@@ -107,9 +111,3 @@ export default class FiltersConfig extends Config {
         );
     }
 }
-
-export const filtersDefaultOptions = () => {
-    return {
-        markUnindexed: true,
-    };
-};

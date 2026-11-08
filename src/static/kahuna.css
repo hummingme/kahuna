@@ -52,12 +52,7 @@
 }
 :host([data-color-theme='dark']) {
     input[type='checkbox'] {
-        appearance: none;
         background-color: var(--nice-grey-500);
-        width: 1em;
-        height: 1em;
-        display: inline-block;
-        vertical-align: middle;
     }
     input[type='checkbox']:checked {
         appearance: revert;
@@ -66,19 +61,10 @@
     input[type='number'] {
         appearance: textfield;
     }
-    input[type='text']:focus-visible,
-    input[type='number']:focus-visible,
-    select:focus-visible,
-    textarea:focus-visible {
-        outline: none;
-        border-color: var(--nice-color-focus);
-    }
-    input[type='text']:invalid,
-    input[type='number']:invalid,
-    select:invalid,
-    textarea:invalid {
-        border: 1px solid var(--nice-color-error);
-        outline: none;
+    input[type='number']::-webkit-outer-spin-button,
+    input[type='number']::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
     }
     input::placeholder,
     textarea::placeholder {
@@ -103,7 +89,8 @@
     }
 }
 
-*:focus-visible {
+*:focus-visible,
+.force-focus-visible {
     outline: 1px solid var(--nice-color-focus);
 }
 
@@ -183,7 +170,19 @@ label {
 label + input {
     margin-left: 5px;
 }
+hr {
+    border-bottom-width: 0;
+    color: var(--nice-grey-700);
+}
+input[type='checkbox'] {
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    vertical-align: middle;
+}
 
+checkbox {
+}
 table {
     table-layout: fixed;
     border-collapse: collapse;
@@ -300,6 +299,7 @@ table.datatable {
 input {
     padding: 0 3px;
     font-size: 14px;
+    height: 22px;
     caret-color: var(--nice-grey-600);
 }
 input,
@@ -318,15 +318,11 @@ button:active:enabled {
     border-color: var(--nice-color-focus);
 }
 input::placeholder,
+input.inactive,
 textarea::placeholder {
     color: var(--nice-grey-500);
     opacity: 1;
     font-style: italic;
-}
-input:invalid,
-textarea:invalid {
-    border: 1px solid var(--nice-color-error);
-    outline: none;
 }
 input.warn,
 select.warn {
@@ -338,58 +334,122 @@ input[type='color'] {
     padding: 2px;
     vertical-align: sub;
 }
-
-hr {
-    border-bottom-width: 0;
-    color: var(--nice-grey-700);
+input[type='text'] {
+    width: 15ch;
+}
+input[type='number'] {
+    width: 10ch;
+}
+input[type='number'].no-spinner {
+    appearance: textfield;
+}
+input[type='number'].no-spinner::-webkit-outer-spin-button,
+input[type='number'].no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
-nav#menu {
+input:disabled,
+textarea:disabled {
+    background-color: var(--nice-grey-200);
+    cursor: not-allowed;
+}
+textarea + label {
+    vertical-align: top;
+}
+input.resizable {
+    min-width: 4ch;
+    max-width: 1000ch;
+    padding-right: 10px;
+}
+.input-wrapper {
+    position: relative;
+    display: inline-block;
+    line-height: normal;
+    vertical-align: middle;
+}
+.input-wrapper > input {
+    box-sizing: border-box;
+    margin: 0;
+    vertical-align: top;
+}
+
+.resize-handle {
+    position: absolute;
+    top: 2.5px;
+    right: 0px;
+    width: 5px;
+    cursor: ew-resize;
+}
+.resize-handle::before {
+    content: '';
+    height: 22px;
+    border-left: 2px dotted var(--nice-grey-400);
+}
+.resize-handle:hover::before {
+    border-color: var(--nice-grey-600);
+}
+
+nav#toolbar {
     flex-shrink: 0;
     overflow: hidden;
     height: 17px;
     padding: 1px 10px 2px;
     background-color: var(--nice-grey-300);
-}
-nav#menu > div {
-    cursor: move;
-    display: flex;
-    align-items: flex-start;
-    white-space: nowrap;
-}
-nav#menu a {
-    color: var(--nice-grey-900);
-}
-nav#menu button {
-    padding-left: 2px;
-    padding-right: 5px;
-}
-nav#menu button:first-of-type {
-    margin-left: -2px;
-}
-nav#menu button.maximize-window {
-    margin-left: auto;
-    border: 0;
-    background-color: inherit;
-}
-nav#menu a.maximize-icon {
-    margin-left: auto;
-}
-svg#window-maximize {
-    margin-right: -9px;
-    margin-bottom: 0px;
-}
-nav#menu .separator {
-    margin: 0 6px;
+    > div {
+        cursor: move;
+        display: flex;
+        align-items: flex-start;
+        white-space: nowrap;
+    }
+    button.symbol {
+        padding-left: 2px;
+        padding-right: 5px;
+    }
+    button.symbol:first-of-type {
+        margin-left: -2px;
+    }
+    button.breadcrumb {
+        color: var(--nice-grey-900);
+        background-color: inherit;
+        border: none;
+        margin-top: -1px;
+        font: inherit;
+    }
+    button.breadcrumb:not(.breadcrumb ~ .breadcrumb) {
+        margin-left: 0.5em;
+    }
+    button.maximize-window {
+        margin-left: auto;
+        border: 0;
+        background-color: inherit;
+    }
+    svg#window-maximize {
+        margin-right: -9px;
+        margin-bottom: 0px;
+    }
+    .separator {
+        margin: 0 6px;
+    }
 }
 
-#main-menu a {
-    display: block;
-    padding: 5px 15px;
-    color: var(--nice-grey-900);
-}
-#main-menu a:hover {
-    color: var(--nice-grey-600);
+#main-menu {
+    a {
+        display: block;
+        padding: 5px 15px;
+        color: var(--nice-grey-900);
+    }
+    a:hover,
+    button:hover {
+        color: var(--nice-grey-600);
+    }
+    button {
+        padding: 5px 15px;
+        color: var(--nice-grey-900);
+        background-color: inherit;
+        border: none;
+        font: inherit;
+    }
 }
 
 div#main {
@@ -427,6 +487,9 @@ div#main {
 .colored-string {
     color: var(--nice-colored-string);
 }
+.warn {
+    color: var(--nice-color-attention);
+}
 .inline {
     display: inline;
     white-space: nowrap;
@@ -440,11 +503,11 @@ div#main {
     clear: both;
     display: table;
 }
-.invalid {
-    border: 0px;
-    border-radius: var(--nice-border-radius);
-    box-shadow: inset 0px 0px 0px 1px var(--nice-color-error);
-    box-sizing: border-box;
+.invalid,
+input:invalid,
+textarea:invalid {
+    border: 1px solid var(--nice-color-error);
+    outline: none;
 }
 button {
     color: var(--nice-grey-700);
@@ -453,7 +516,6 @@ button.symbol {
     border: none;
     background-color: inherit;
     padding: 0;
-    font-size: 18px;
     line-height: 1;
 }
 button.symbol:hover {
@@ -464,6 +526,18 @@ button.symbol span {
     font-size: 14px;
     padding-left: 3px;
 }
+
+button.tool {
+    color: var(--nice-grey-900);
+    background-color: inherit;
+    border: none;
+    padding: 0;
+    font: inherit;
+}
+button.tool:hover {
+    color: var(--nice-grey-600);
+}
+
 h1.precis {
     font-size: var(--nice-font-size);
     font-weight: 400;
@@ -548,11 +622,26 @@ div#dtsearch {
     flex-wrap: wrap;
     justify-content: flex-start;
     gap: 10px;
-}
-div#dtsearch input {
-    flex: 1;
-    min-width: 120px;
-    max-width: 250px;
+    input {
+        flex: 1;
+        min-width: 5ch;
+        max-width: 100ch;
+    }
+    button,
+    select {
+        height: 22px;
+    }
+    div.date-search-wrapper {
+        margin-top: -2px;
+    }
+    button.left-datespan-nav {
+        margin-left: -7px;
+        margin-right: -5px;
+    }
+    button.right-datespan-nav {
+        margin-left: -5px;
+        margin-right: -7px;
+    }
 }
 
 div#resize-border {
@@ -641,6 +730,7 @@ div.drag-handle {
 div#config-stage {
     overflow: auto;
     p {
+        height: 22px;
         margin: 10px 5px;
     }
     form {
@@ -649,8 +739,16 @@ div#config-stage {
     table {
         margin: 0;
     }
+    label input,
+    label span,
+    label svg.inline {
+        vertical-align: middle;
+    }
     svg.inline {
-        margin-bottom: -4px;
+        margin-bottom: -5px;
+    }
+    label:has(> input[type='checkbox']:first-child) svg.inline {
+        margin-bottom: 1px;
     }
     svg.switch-target {
         transform: translateY(3px);
@@ -665,10 +763,17 @@ div#config-stage {
         margin-right: 10px;
         margin-bottom: 15px;
     }
+    span.not-available {
+        display: inline;
+        padding: 0 7px;
+    }
+    span.not-available::after {
+        content: '–';
+    }
 }
 
 div#tooltip {
-    display: block;
+    display: none;
     position: absolute;
 }
 div#tooltip ul {
@@ -750,6 +855,13 @@ fieldset#columns-table {
     border-bottom: 0;
 }
 
+div#js-console {
+    div#js-codearea-wrapper {
+        padding: 5px;
+        margin-top: 5px;
+    }
+}
+
 div#js-codearea-wrapper {
     display: inline-block;
 }
@@ -793,10 +905,14 @@ div#selection-info {
     display: flex;
     flex-direction: row;
     column-gap: 10px;
+    label {
+        margin-left: 0px;
+    }
+    button {
+        margin-top: -4px;
+    }
 }
-div#selection-info label {
-    margin-left: 0px;
-}
+
 div.lonely {
     margin: 20px 10px;
 }
@@ -975,7 +1091,7 @@ div.modal-window {
     min-width: 350px;
     max-height: 95vh;
     box-sizing: border-box;
-    padding: 0 3em;
+    padding: 1em 4em;
     background: inherit;
     border-radius: var(--nice-border-radius);
     border: 2px solid var(--nice-grey-400);
@@ -1060,16 +1176,6 @@ select#copy-target-db {
     max-width: 10em;
 }
 
-input:disabled,
-textarea:disabled {
-    background-color: var(--nice-grey-200);
-    cursor: not-allowed;
-}
-
-textarea + label {
-    vertical-align: top;
-}
-
 div#value-editor {
     form#value-form {
         display: grid;
@@ -1097,6 +1203,7 @@ div#value-editor {
         grid-auto-flow: column;
         grid-column: controls;
         grid-row: auto;
+
         .value {
             grid-column: value;
         }
@@ -1129,20 +1236,22 @@ div#value-editor {
             }
         }
     }
+    form#value-form > div.input-method-controls {
+        grid-column: controls;
+    }
     label[for='field-upload-charset'] {
         padding-left: 1.3em;
     }
     .codearea-wrapper {
         display: flex;
         align-items: flex-start;
-        margin-top: 0.5em;
         #js-codearea {
             height: 4lh;
             width: 20em;
             white-space: pre;
         }
     }
-    .textarea-wrapper,
+    .flexinput-wrapper,
     .form-wrapper {
         display: flex;
         align-items: flex-start;
@@ -1153,9 +1262,6 @@ div#value-editor {
     form#value-form > select {
         width: min-content;
     }
-    .number-input {
-        width: 10em;
-    }
     .string-textarea {
         height: 1lh;
         width: 25em;
@@ -1164,9 +1270,20 @@ div#value-editor {
         overflow: auto;
     }
     .value-icons {
-        display: grid;
         .value-icon {
-            margin: 3px 0 3px 2px;
+            margin-left: 5px;
         }
+    }
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 0.5em;
+    row-gap: 0.2em;
+    width: fit-content;
+    label,
+    div {
+        justify-self: start;
     }
 }

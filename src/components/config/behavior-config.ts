@@ -6,29 +6,28 @@
 import { html } from 'lit-html';
 
 import Config from '#components/config/config';
-import type {
-    ControlInstance,
-    BehaviorOptions,
-    OptionName,
-} from '#components/config/types';
-import { equalTarget, globalTarget, emptyTarget } from '#lib/app-target';
 import {
-    type Charset,
-    CHARSETS,
-    type EncodableCharset,
-    encodableCharsets,
-} from '#lib/charsets';
-import checkbox from '#lib/checkbox';
+    behaviorDefaultOptions,
+    BehaviorAllOptions,
+} from '#components/config/behavior-defaults';
+import type { ControlInstance, OptionName, SelectOption } from '#components/config/types';
+import checkbox from '#components/parts/checkbox';
+import infoIcon from '#components/parts/info-icon';
+import { equalTarget, globalTarget, emptyTarget } from '#lib/app-target';
+import { CHARSETS, encodableCharsets } from '#lib/charsets';
 import env from '#lib/environment';
-import infoIcon from '#lib/info-icon';
 import settings from '#lib/settings';
 import { selfMap } from '#lib/utils';
-import { AppTarget, ExecutionMethod, SettingSubject } from '#types';
+import { AppTarget, SettingSubject } from '#types';
+
+type BehaviorConfigValues = BehaviorAllOptions & {
+    onLoadTarget: AppTarget;
+};
 
 type BehaviorConfigState = {
-    defaults: BehaviorOptions;
+    defaults: BehaviorConfigValues;
     subject: SettingSubject;
-} & BehaviorOptions;
+} & BehaviorAllOptions;
 
 export default class BehaviorConfig extends Config {
     constructor({
@@ -37,8 +36,8 @@ export default class BehaviorConfig extends Config {
         defaults,
     }: {
         control: ControlInstance;
-        values: BehaviorOptions;
-        defaults: BehaviorOptions;
+        values: BehaviorConfigValues;
+        defaults: BehaviorConfigValues;
     }) {
         const state: BehaviorConfigState = {
             ...values,
@@ -53,28 +52,25 @@ export default class BehaviorConfig extends Config {
         const onLoadTarget = onLoadTargets.get(location.host)
             ? control.target
             : emptyTarget;
-        const vals: BehaviorOptions = Object.assign(values, {
-            onLoadTargets,
-            onLoadTarget,
-        });
+        const vals: BehaviorConfigValues = { ...values, onLoadTarget, onLoadTargets };
         if (!control.rememberedSettings) {
             control.remember(vals);
         }
         return new BehaviorConfig({
             control,
             values: vals,
-            defaults: Object.assign(defaults, behaviorGlobalDefaultOptions()),
+            defaults: { ...defaults, onLoadTargets, onLoadTarget },
         });
     }
     checkboxOptions = [
         { name: 'confirmDeleteRow', label: 'ask for confirmation on "delete row"' },
         {
-            name: 'displayCodearea',
-            label: 'display a textarea for Javascript code to be executed',
+            name: 'escapeNonAscii',
+            label: 'escape all non ASCII characters in the datatable view',
         },
         {
-            name: 'codeareaPlaceholder',
-            label: 'show the available variables in the javascript textarea',
+            name: 'useLocalTimezone',
+            label: `use local time zone (${env.timeZone}) for date values`,
         },
         { name: 'queryPreferWorker', label: 'prefer webworker for data querying' },
     ];
@@ -83,7 +79,7 @@ export default class BehaviorConfig extends Config {
             name: 'datatableRows',
             label: 'rows per page',
             type: 'number',
-            size: 4,
+            style: 'width: 6ch;',
             maxlength: 5,
             '?required': true,
             min: 1,
@@ -93,7 +89,7 @@ export default class BehaviorConfig extends Config {
             name: 'hideMessagesSeconds',
             label: 'seconds after which messages are hidden (0 = never)',
             type: 'number',
-            size: 2,
+            style: 'width: 5ch;',
             maxlength: 2,
             '?required': true,
             min: 0,
@@ -101,11 +97,6 @@ export default class BehaviorConfig extends Config {
         },
     ];
     selectOptions = [
-        {
-            name: 'codeExecutionMethod',
-            label: 'preferred method to execute Javascript',
-            options: selfMap(this.codeExecutionMethods()),
-        },
         {
             name: 'uploadCharset',
             label: 'charset of uploaded text files',
@@ -117,35 +108,15 @@ export default class BehaviorConfig extends Config {
             options: selfMap(encodableCharsets()),
         },
     ];
-    codeExecutionMethods() {
-        const methods: ExecutionMethod[] = ['webworker'];
-        if (env.manifestVersion === 2) {
-            methods.push('unsafeEval');
-        }
-        if (env.executionMethodConditions['userscript']()) {
-            methods.push('userscript');
-        }
-        return methods;
-    }
     view() {
         return html`
-            ${this.checkboxOptionsView()} ${this.selectOptionsView()}
+            ${this.checkboxOptionsView()}
+            ${this.codeExecutionMethodsView()}${this.selectOptionsView()}
             ${this.inputOptionsView()} ${this.onLoadTargetView()}
         `;
     }
     decorateLabel(name: OptionName, label: string) {
-        if (name === 'displayCodearea' && env.codeExecution === false) {
-            const info = `This setting has no effect on ${window.location.origin}
-because all possibilities to execute javascript code are blocked`;
-            return html`
-                <span class="option-disabled">
-                    ${label}
-                    <span>
-                        ${infoIcon(info, { style: 'color: var(--nice-color-attention)' })}
-                    </span>
-                </span>
-            `;
-        } else if (name === 'codeExecutionMethod') {
+        if (name === 'codeExecutionMethod') {
             const info: string[] = [];
             if (env.manifestVersion === 2 && env.unsafeEval === false) {
                 info.push(
@@ -163,15 +134,38 @@ because all possibilities to execute javascript code are blocked`;
                 );
             }
             if (info.length > 0) {
+                const attribs = {
+                    ...(env.codeExecutionMethods.length === 0
+                        ? { class: 'warn inline' }
+                        : null),
+                };
                 return html`
                     <span>
                         ${label}
-                        <span>${infoIcon(info.join('\n'))}</span>
+                        <span>${infoIcon(info.join('\n'), attribs)}</span>
                     </span>
                 `;
             }
         }
         return label;
+    }
+    codeExecutionMethodsView() {
+        const props: SelectOption = {
+            name: 'codeExecutionMethod',
+            label: 'preferred method to execute Javascript',
+            options: selfMap(env.codeExecutionMethods),
+        };
+        const methods = env.codeExecutionMethods;
+        if (methods.length > 0) {
+            return this.optionSelectView(props);
+        } else {
+            return html`
+                <p>
+                    <span class="not-available"></span>
+                    ${this.optionLabel(props.name, props.label)}
+                </p>
+            `;
+        }
     }
     onLoadTargetView() {
         const target = this.target;
@@ -198,7 +192,7 @@ because all possibilities to execute javascript code are blocked`;
                         from database
                         <em>${target.database}</em>
                     `}
-            at program start
+            at start
         `;
         const onLoadTarget = this.state.onLoadTargets!.get(location.host) ?? globalTarget;
         const checked = equalTarget(onLoadTarget, target);
@@ -264,32 +258,3 @@ because all possibilities to execute javascript code are blocked`;
         return await Config.getDefaults(target, 'behavior', behaviorDefaultOptions());
     }
 }
-
-const behaviorGlobalDefaultOptions = (): { onLoadTargets: Map<string, AppTarget> } => {
-    return { onLoadTargets: new Map() };
-};
-
-export const behaviorDefaultOptions = () => {
-    const defaultOptions: {
-        datatableRows: number;
-        hideMessagesSeconds: number;
-        confirmDeleteRow: boolean;
-        displayCodearea: boolean;
-        codeareaPlaceholder: boolean;
-        queryPreferWorker: boolean;
-        codeExecutionMethod: ExecutionMethod;
-        uploadCharset: Charset;
-        downloadCharset: EncodableCharset;
-    } = {
-        datatableRows: 20,
-        hideMessagesSeconds: 12,
-        confirmDeleteRow: true,
-        displayCodearea: true,
-        codeareaPlaceholder: true,
-        queryPreferWorker: true,
-        codeExecutionMethod: 'webworker',
-        uploadCharset: 'utf-8',
-        downloadCharset: 'utf-8',
-    };
-    return { ...defaultOptions, ...behaviorGlobalDefaultOptions() };
-};

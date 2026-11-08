@@ -12,14 +12,14 @@ import messenger from '#lib/messenger';
 import settings from '#lib/settings';
 import type { AppTarget, KDatabase, KTable } from '#types';
 
-export interface AppState extends LoadingViewParams {
+export type AppState = LoadingViewParams & {
     databases: KDatabase[];
     selectedDB?: number | undefined;
     tables: KTable[];
     selectedTable?: number | undefined;
     aboutVisible: boolean;
     updateInfoVisible: boolean;
-}
+};
 
 const AppStore = class {
     #state: AppState;

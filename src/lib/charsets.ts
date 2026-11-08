@@ -9,7 +9,7 @@
  */
 export const CHARSETS = [
     'utf-8',
-    'ibm866',
+    'binary',
     'iso-8859-2',
     'iso-8859-3',
     'iso-8859-4',
@@ -23,9 +23,6 @@ export const CHARSETS = [
     'iso-8859-14',
     'iso-8859-15',
     'iso-8859-16',
-    'koi8-r',
-    'koi8-u',
-    'macintosh',
     'windows-874',
     'windows-1250',
     'windows-1251',
@@ -36,16 +33,20 @@ export const CHARSETS = [
     'windows-1256',
     'windows-1257',
     'windows-1258',
-    'x-mac-cyrillic',
-    'gbk',
-    'gb18030',
     'big5',
     'euc-jp',
-    'iso-2022-jp',
-    'shift_jis',
     'euc-kr',
+    'gb18030',
+    'gbk',
+    'ibm866',
+    'iso-2022-jp',
+    'koi8-r',
+    'koi8-u',
+    'macintosh',
+    'shift_jis',
     'utf-16be',
     'utf-16le',
+    'x-mac-cyrillic',
 ] as const;
 
 export type Charset = (typeof CHARSETS)[number];
@@ -69,6 +70,7 @@ const NON_SBCS = [
     'iso-2022-jp',
     'shift_jis',
     'euc-kr',
+    'binary',
 ] as const;
 
 type NonSBCS = (typeof NON_SBCS)[number];

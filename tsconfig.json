@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
-        "target": "es2024",
-        "lib": ["es2024", "dom", "dom.iterable", "dom.asynciterable"],
+        "target": "es2025",
+        "lib": ["es2025", "dom", "dom.iterable", "dom.asynciterable"],
         "module": "esnext",
         "moduleResolution": "bundler",
         "noEmit": true,

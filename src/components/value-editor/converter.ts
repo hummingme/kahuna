@@ -6,11 +6,13 @@
 import Field from '#components/value-editor/fields/field';
 import { isNumber } from '#lib/datatypes';
 import { itemsPerLine } from '#lib/datatype-attributes';
+import { subTimezoneOffset } from '#lib/timezone';
 import {
     formattedNumericArray,
     FormatterOptions,
     formatterOptions,
 } from '#lib/value-formatter';
+import { DatepickerType } from '#types';
 
 export function stringToArray(value: string) {
     let result: (number | string)[] = [];
@@ -121,14 +123,37 @@ export function arrayToFieldValue(
     opts: Partial<FormatterOptions> = {},
 ): string {
     const isNumeric = value.every((v) => Number.isFinite(v));
-    const expanded = field.state.formOptions.expanded;
+    const compacted = field.formOptions().compacted;
     const perLine = itemsPerLine(field.state.type);
-    const options = formatterOptions(Object.assign(opts, { expanded, perLine }));
-    if (expanded === false) {
+    const options = formatterOptions(Object.assign(opts, { compacted, perLine }));
+    if (compacted) {
         return field.stringFormatter.render(value, 'array', options);
     } else if (isNumeric) {
         return formattedNumericArray(value as number[], 'array', options);
     } else {
         return field.sourceFormatter.render(value, 'array', options);
+    }
+}
+
+export function dateToString(
+    value: Date,
+    datepickerType: DatepickerType,
+    useLocalTimezone: boolean,
+) {
+    if (useLocalTimezone) {
+        value = subTimezoneOffset(value);
+    }
+    const dateStr = value.toISOString().replace('T', ' ');
+    switch (datepickerType) {
+        case 'year':
+            return dateStr.substring(0, 4);
+        case 'month':
+            return dateStr.substring(0, 7);
+        case 'date':
+            return dateStr.substring(0, 10);
+        case 'datetime':
+            return dateStr.substring(0, 19);
+        case 'millisecond':
+            return dateStr.substring(0, 23);
     }
 }

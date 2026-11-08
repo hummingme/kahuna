@@ -3,11 +3,11 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html, type TemplateResult } from 'lit-html';
-import { symbolButton } from '#lib/button';
-import textinput from '#lib/textinput';
+import { html, TemplateResult } from 'lit-html';
+import { symbolButton } from '#components/parts/button';
+import textinput from '#components/parts/textinput';
 
-interface ChevronNavigationState {
+type ChevronNavigationState = {
     offset: number;
     step: number;
     min: number;
@@ -17,7 +17,7 @@ interface ChevronNavigationState {
     input: boolean;
     navigate: (arg0: number) => void;
     posInfo: ((arg0: ChevronNavigationState) => TemplateResult) | null;
-}
+};
 
 const state = Symbol('chevron state');
 
@@ -100,25 +100,33 @@ const ChevronNavigation = class {
         if (input === false) {
             return '';
         }
-        const pattern = `[0-9]{1,${String(total).length}}`;
-        const size = total < 10 ? 1 : String(total).length - 1;
+        const size = String(total).length + 1.2;
+        const style = `width: ${size}ch;`;
         const inputFrom = textinput({
+            id: 'chevron-from',
             name: 'from',
+            type: 'number',
             '.value': offset,
-            size,
-            pattern,
+            min: 1,
+            max: total,
+            style,
+            classes: ['no-spinner'],
             '@change': this.fromChanged.bind(this),
-        });
+        }).view();
         const toValue = offset + step - 1 > total ? total : offset + step - 1;
         const inputTo =
             step > 1
                 ? textinput({
+                      id: 'chevron-to',
                       name: 'to',
+                      type: 'number',
                       '.value': toValue,
-                      size,
-                      pattern,
+                      min: 1,
+                      max: total,
+                      style,
+                      classes: ['no-spinner'],
                       '@change': this.toChanged.bind(this),
-                  })
+                  }).view()
                 : '';
         return html`
             ${inputFrom}${inputTo !== ''

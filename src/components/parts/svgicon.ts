@@ -6,14 +6,15 @@
 import { html, type TemplateResult } from 'lit-html';
 import { spread } from '@open-wc/lit-helpers';
 
+import { expandAriaAttributes } from '#lib/aria';
+
 const svgIcon = (
     name: string,
-    attributes: { [key: string]: unknown } = {},
+    attributes: Record<string, unknown> = {},
 ): TemplateResult => {
-    const defaults = { width: 18, height: 18 };
-    attributes = Object.assign(defaults, attributes);
+    const defaults = { width: 18, height: 18, 'aria-hidden': true, focusable: false };
     return html`
-        <svg ${spread(attributes)}>
+        <svg ${spread({ ...defaults, ...expandAriaAttributes(attributes) })}>
             <use href="#${name}"></use>
         </svg>
     `;

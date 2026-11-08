@@ -3,10 +3,10 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
+import { isFlexInputNode } from '#components/value-editor/flex-input';
 import Field, { type ValueFieldArgs } from '#components/value-editor/fields/field';
 import { arrayToFieldValue, stringToArray } from '#components/value-editor/converter';
 import { csvFormatHint, jsonHint } from '#components/value-editor/hints';
-import { valueControlsTextareaView } from '#components/value-editor/view-utils';
 import CsvReader from '#lib/csvreader';
 import {
     hasValuesIterator,
@@ -25,8 +25,9 @@ export default class ArrayField extends Field {
             this.state.inputMethod = 'form';
         }
     }
-    view() {
-        return valueControlsTextareaView(this);
+    formView() {
+        const value = this.toFormValue() || '';
+        return this.flexInput ? this.flexInput.view(value) : '';
     }
     get value(): unknown[] {
         return this.state.value as [];
@@ -63,7 +64,7 @@ export default class ArrayField extends Field {
     }
     toFormValue(): string {
         const options = this.formOptions();
-        if (this.state.inputMethod === 'form' && options.expanded) {
+        if (this.state.inputMethod === 'form' && !options.compacted) {
             return arrayToFieldValue(this.value, this, {
                 ...options,
                 escapeForJson: true,
@@ -73,8 +74,8 @@ export default class ArrayField extends Field {
         }
     }
     fromFormValue(): unknown[] | undefined {
-        const textarea = this.node.value;
-        if (textarea instanceof HTMLTextAreaElement) {
+        const textarea = this.nodeInput;
+        if (isFlexInputNode(textarea)) {
             let value = [];
             try {
                 const parsed = JSON.parse(textarea.value);
@@ -88,18 +89,19 @@ export default class ArrayField extends Field {
     isFormEditable(value: unknown) {
         return !Array.isArray(value) || isJsonSerializableArray(value);
     }
-    validateTextareaValue(value: string) {
+    validate(value: string) {
         return Array.isArray(JSON.parse(value));
     }
-    invalidTextareaHint = 'The form value must be an array in json syntax!';
+    override invalidHint = 'The form value must be an array in json syntax!';
     override async handleUploadedValue(file: File) {
         const content = await decodeFromFile(file, this.state.uploadCharset);
         const csv = new CsvReader();
         await csv.init(content);
         const data = csv.getData();
         const value = data.length === 1 ? data[0] : data;
-        this.state.formOptions.expanded = this.state.formOptions.expanded =
-            value.length < isLarge('array');
+        const compacted = this.value.length >= isLarge('string');
+        this.formatterMgr.setOptions('form', { compacted });
+        this.formatterMgr.setOptions('code', { compacted });
         this.update(value);
     }
     hints = {

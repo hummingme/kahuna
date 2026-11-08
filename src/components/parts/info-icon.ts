@@ -5,12 +5,13 @@
 
 import { html, type TemplateResult } from 'lit-html';
 
-import svgIcon from '#lib/svgicon';
+import svgIcon from '#components/parts/svgicon';
 
 export default function infoIcon(
     info: string,
     attributes: { [key: string]: unknown } = {},
 ): TemplateResult {
+    attributes.class ??= 'inline';
     return html`
         <span title=${info}>${svgIcon('tabler-info-circle', attributes)}</span>
     `;

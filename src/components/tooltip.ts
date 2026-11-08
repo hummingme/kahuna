@@ -3,13 +3,12 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html, nothing, render, type TemplateResult } from 'lit-html';
+import { html, render, type TemplateResult } from 'lit-html';
 import { ref } from 'lit/directives/ref.js';
 
 import appWindow from '#components/app-window';
 import configLayer from '#components/configlayer';
 import Layer from '#components/layer';
-import appStore from '#lib/app-store';
 import calculateDistance from '#lib/calculate-distance';
 import { type Position, EMPTY_POSITION } from '#types';
 
@@ -21,7 +20,7 @@ type TooltipArgs = {
 };
 
 type TooltipState = Omit<TooltipArgs, 'anchor'> & {
-    node?: HTMLElement;
+    node?: HTMLDivElement;
     visible: boolean;
     anchorPosition: Position;
     layerNode: HTMLElement | undefined;
@@ -71,33 +70,29 @@ class Tooltip {
             layerNode,
         });
         layer.addEscLayerHandler();
-        appStore.rerender();
+        this[state].node!.style.display = 'block';
+        this.render();
     }
     close() {
-        if (this[state].visible) {
+        const { layerNode, node, visible } = this[state];
+        if (node && visible) {
             this.#layer.removeEscLayerHandler();
             this.removeMousemoveHandler(appWindow.win);
-            if (this[state].layerNode) {
-                this.removeMousemoveHandler(this[state].layerNode);
+            if (layerNode) {
+                this.removeMousemoveHandler(layerNode);
             }
             this.update(this.initState);
-            appStore.rerender();
+            node.style.display = 'none';
         }
     }
     node() {
-        const { view, visible } = this[state];
-        if (view && visible) {
-            return html`
-                <div id="tooltip" class="layer" ${ref(this.nodeReady.bind(this))}></div>
-            `;
-        } else {
-            return nothing;
-        }
+        return html`
+            <div id="tooltip" class="layer" ${ref(this.nodeReady.bind(this))}></div>
+        `;
     }
     nodeReady(node?: Element) {
-        if (node) {
-            this[state].node = node as HTMLElement;
-            this.render();
+        if (node instanceof HTMLDivElement) {
+            this[state].node = node;
         }
     }
     render() {
@@ -112,11 +107,6 @@ class Tooltip {
                 this.addMousemoveHandler(appWindow.win);
                 if (layerNode) this.addMousemoveHandler(layerNode);
             });
-        }
-    }
-    rerender() {
-        if (this[state].node) {
-            render(this.view(), this[state].node);
         }
     }
     view() {

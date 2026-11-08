@@ -3,11 +3,9 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-const rxLineTerminator = /[\n\r\u2028\u2029]/;
-
-export default function quotedString(val: string) {
-    if (rxLineTerminator.test(val)) {
-        return `\`${escapeForTemplateLiteral(val)}\``;
+export default function quotedString(val: string, handleBackslash: boolean) {
+    if (/[\n\r]/.test(val)) {
+        return `\`${escapeForTemplateLiteral(val, handleBackslash)}\``;
     } else {
         return escapeQuotes(val);
     }
@@ -20,9 +18,7 @@ function escapeQuotes(val: string) {
     return val.includes("'") ? `"${val}"` : `'${val}'`;
 }
 
-const rxTemplateLiteral = /[`\\]|\$\{/g;
-function escapeForTemplateLiteral(value: string): string {
-    return value.replace(rxTemplateLiteral, (match) =>
-        match === '${' ? '\\${' : '\\' + match,
-    );
+function escapeForTemplateLiteral(value: string, handleBackslash: boolean): string {
+    const rx = handleBackslash ? /[`\\]|\$\{/g : /`|\$\{/g;
+    return value.replace(rx, (match) => (match === '${' ? '\\${' : '\\' + match));
 }

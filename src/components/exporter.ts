@@ -5,22 +5,22 @@
 
 import { html, TemplateResult } from 'lit-html';
 import type { Collection, Dexie, Table } from 'dexie';
-import { exportDB, type ExportOptions } from 'dexie-export-import';
+import { exportDB } from 'dexie-export-import';
 
 import configLayer from '#components/configlayer';
-import Database from '#components/database';
 import datatable from '#components/datatable';
 import ImporterExporter from '#components/importer-exporter';
 import ExportConfig from '#components/config/export-config';
+import { type ExportOptions } from '#components/config/export-defaults';
+import textinput from '#components/parts/textinput';
 import appStore from '#lib/app-store';
 import { globalTarget } from '#lib/app-target';
 import { getConnection } from '#lib/connection';
 import { isPlainObject } from '#lib/datatypes';
 import { getCollection, isPrimKeyNamed, leadingUnnamedPkValues } from '#lib/dexie-utils';
 import env from '#lib/environment';
-import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import { escapeUnicode, unescapeString } from '#lib/escape-string';
 import messenger from '#lib/messenger';
-import textinput from '#lib/textinput';
 import { capitalize, downloadFile } from '#lib/utils';
 import { AppTarget, KTable, Message, UnknownRecord } from '#types';
 import {
@@ -37,18 +37,14 @@ type ExporterArgs = {
         | ((table: string, values: unknown, key: unknown) => boolean)
         | undefined;
 };
-type ExportSettings = FilenameTemplateSettings & {
-    dataExportFormat: ExportFormat;
-    primaryKeyName: string;
-    directValuesName: string;
-    prettyDexie: boolean;
-    prettyJSON: boolean;
-};
-type FilenameTemplateSettings = {
-    filenameDatabase: string;
-    filenameTable: string;
-    filenameSelection: string;
-};
+
+type ExportSettings = ExportOptions;
+
+type FilenameTemplateSettings = Pick<
+    ExportSettings,
+    'filenameDatabase' | 'filenameTable' | 'filenameSelection'
+>;
+
 type ExporterState = ExporterArgs &
     ExportSettings & {
         filename: string;
@@ -81,7 +77,7 @@ export const Exporter = class {
         if (['table', 'selection'].includes(args.usage)) {
             table = appStore.table(args.target.table);
         } else {
-            tables = await Database.getTables(args.target.database);
+            tables = appStore.state.tables;
             settings.dataExportFormat = 'dexie';
         }
         const filename = this.parseFilename({ ...args, ...settings, filename: '' });
@@ -156,9 +152,9 @@ export const Exporter = class {
                     return;
                 } else {
                     const filter = this[state].dexieExportFilter;
-                    const options: ExportOptions = {
+                    const options = {
                         ...(filter && { filter }),
-                        prettyJson: this[state].prettyDexie,
+                        prettyJSON: this[state].prettyDexie,
                     };
                     content = await exportDB(dbHandle, options);
                 }
@@ -344,6 +340,8 @@ export const Exporter = class {
         return replacers;
     }
     panel(): TemplateResult {
+        const { usage } = this[state];
+        const filenameId = `export-${usage}-filename`;
         const content = html`
             <div>
                 <div>
@@ -360,13 +358,13 @@ export const Exporter = class {
                 <div>
                     <label for="export-filename">filename</label>
                     ${textinput({
-                        name: 'export-filename',
-                        size: 20,
+                        id: filenameId,
+                        classes: ['resizable'],
                         '.value': escapeUnicode(this[state].filename),
                         '@change': this.changeExportFilename.bind(this),
                         '@focus': this.focusExportFilename.bind(this),
                         '@focusout': this.focusoutExportFilename.bind(this),
-                    })}
+                    }).view()}
                 </div>
             </div>
         `;
@@ -425,7 +423,7 @@ export const Exporter = class {
             : this.formats[0];
         const filename = this.parseFilename({ ...this[state], dataExportFormat });
         this.update({ filename, dataExportFormat });
-        this.#helper.updateSettings('export', this[state]);
+        this.updateSettings();
         configLayer.update({});
     }
     isExportFormat(value: string): value is ExportFormat {
@@ -433,14 +431,21 @@ export const Exporter = class {
     }
     changeExportFilename(event: Event) {
         const target = event.target as HTMLInputElement;
+        const fname = unescapeString(target.value.trim());
         this.update({
-            [`filename${capitalize(this[state].usage)}`]: unescapeUnicode(
-                target.value.trim(),
-            ),
+            [`filename${capitalize(this[state].usage)}`]: fname,
         });
-        this.update({ filename: this.parseFilename(this[state]) });
-        this.#helper.updateSettings('export', this[state]);
+        const filename = this.parseFilename(this[state]);
+        this.update({ filename });
+        this.updateSettings();
         configLayer.update({});
+    }
+    updateSettings() {
+        const values: Partial<ExporterState> = { ...this[state] };
+        if (!values.filenameDatabase?.length) delete values.filenameDatabase;
+        if (!values.filenameTable?.length) delete values.filenameTable;
+        if (!values.filenameSelection?.length) delete values.filenameSelection;
+        this.#helper.updateSettings('export', values);
     }
     focusExportFilename(event: Event) {
         const target = event.target as HTMLInputElement;

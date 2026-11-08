@@ -3,19 +3,15 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import type { Column } from '#lib/column';
-import type {
-    BehaviorOptions,
-    ColumnsOptions,
-    ExportOptions,
-    FiltersOptions,
-    ImportOptions,
-} from '#components/config/types.ts';
+import type { ApplicationOptions } from '#components/config/application-defaults';
+import type { BehaviorOptions } from '#components/config/behavior-defaults';
+import type { ColumnsOptions } from '#components/config/columns-defaults';
+import type { ExportOptions } from '#components/config/export-defaults';
+import type { FiltersOptions } from '#components/config/filters-defaults';
+import type { ImportOptions } from '#components/config/import-defaults';
 import type { JsCodeareaConfigValues } from '#components/config/jscodearea-config';
-import type { ApplicationOptions } from '#components/config/types';
 import type { FieldSettings } from '#components/value-editor/fields/field';
-import type { AppTarget } from '#types/common';
-import type { Filter } from '#types/filter';
+import type { AppTarget, Column, Filter } from '#types';
 
 export type SettingSubject =
     | 'behavior'
@@ -32,6 +28,8 @@ export type SettingSubject =
 export type SettingObject = SettingKey & {
     values: Partial<SerializedSettingValues>;
 };
+
+export type WidthObject = { id: string; width: number };
 
 export type SettingValues =
     | BehaviorSettingValues

@@ -14,10 +14,15 @@ import {
     validateASCII,
     validatePositiveInteger,
 } from '#components/value-editor/validations';
-import type { RequiredVariables } from '#components/js-codearea';
 import { isLarge } from '#lib/datatype-attributes';
-import { isBlobLike } from '#lib/datatypes';
+import { isBlobLike, isFileLike } from '#lib/datatypes';
 import { formattedNumericArray, type FormatterOptions } from '#lib/value-formatter';
+import {
+    RequiredVariables,
+    BUFFER_MAX_LENGTH,
+    VERY_LARGE_VALUE,
+    RememberedValue,
+} from '#types';
 
 export default class BlobField extends Field {
     nodeBlobSize: Ref<HTMLInputElement> = createRef();
@@ -26,36 +31,33 @@ export default class BlobField extends Field {
     override async init(requireVariables: () => RequiredVariables) {
         await super.init(requireVariables);
         this.buffer = await this.value.arrayBuffer();
-        this.codearea?.updateCode();
     }
-    view() {
+    formView() {
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    <div>
-                        ${textInput(
-                            this,
-                            {
-                                id: 'blobsize',
-                                '.value': String(this.value.size),
-                                size: 8,
-                                maxLength: 9,
-                                label: 'size',
-                                refVar: this.nodeBlobSize,
-                            },
-                            true,
-                        )}
-                        ${textInput(this, {
-                            id: 'blobtype',
-                            '.value': String(this.value.type),
-                            size: 15,
-                            maxLength: 100,
-                            label: 'type',
-                            refVar: this.nodeBlobType,
-                        })}
-                    </div>
-                    ${this.inputMethodView()}
-                </div>
+            <div>
+                ${textInput(
+                    this,
+                    {
+                        id: this.valueInputId('size'),
+                        '.value': String(this.value.size),
+                        type: 'number',
+                        min: 0,
+                        max: BUFFER_MAX_LENGTH,
+                        style: 'width: 13ch;',
+                        label: 'size',
+                        refVar: this.nodeBlobSize,
+                    },
+                    true,
+                )}
+                ${textInput(this, {
+                    id: this.valueInputId('type'),
+                    '.value': String(this.value.type),
+                    style: 'width: 15ch;',
+                    classes: ['resizable'],
+                    maxLength: 100,
+                    label: 'type',
+                    refVar: this.nodeBlobType,
+                })}
             </div>
         `;
     }
@@ -64,7 +66,7 @@ export default class BlobField extends Field {
     }
     set value(value: unknown) {
         let result: Blob = new Blob(['']);
-        if (isBlobLike(value) && !(value instanceof Blob)) {
+        if ((isBlobLike(value) || isFileLike(value)) && !(value instanceof Blob)) {
             value = new Blob([value], { type: (value as Blob).type });
         }
         if (value instanceof Blob) {
@@ -87,30 +89,48 @@ export default class BlobField extends Field {
         }
     }
     fromFormValue(): Blob | undefined {
+        const fieldValues = this.valuesFromForm();
+        if (!fieldValues) return;
+        const { size, type } = fieldValues;
+        const buffer = this.buffer;
+        let blob = this.value;
+        if (size !== buffer.byteLength || type !== this.value.type) {
+            blob = new Blob([copyArrayBuffer(buffer, new ArrayBuffer(size))], {
+                type,
+            });
+        }
+        return blob;
+    }
+    valuesFromForm(): { size: number; type: string } | undefined {
         if (
             this.nodeBlobSize.value instanceof HTMLInputElement &&
             this.nodeBlobType.value instanceof HTMLInputElement
         ) {
-            let blob = this.value;
-            const blobSize = Number(this.nodeBlobSize.value.value);
-            const blobType = this.nodeBlobType.value.value;
-            const buffer = this.buffer;
-            if (blobSize !== buffer.byteLength || blobType !== this.value.type) {
-                blob = new Blob([copyArrayBuffer(buffer, new ArrayBuffer(blobSize))], {
-                    type: blobType,
-                });
-            }
-            return blob;
+            const size = Number(this.nodeBlobSize.value.value);
+            const type = this.nodeBlobType.value.value.trim();
+            return { size, type };
         }
     }
     validate() {
         let valid = false;
-        const blobSize = validatePositiveInteger(this.nodeBlobSize.value);
+        const blobSize = validatePositiveInteger(this.nodeBlobSize.value, {
+            max: BUFFER_MAX_LENGTH,
+        });
         const blobType = validateASCII(this.nodeBlobType.value, false);
         if (typeof blobSize === 'number' && typeof blobType === 'string') {
             valid = true;
         }
         this.valid = valid;
+    }
+    valueChanged(remembered: RememberedValue) {
+        const oldValue = remembered.value;
+        if (!(oldValue instanceof Blob)) return true;
+
+        const fieldValues = this.valuesFromForm();
+        if (!fieldValues) return;
+
+        const { size, type } = fieldValues;
+        return size !== oldValue.size || type !== oldValue.type;
     }
     override async update(value: Blob) {
         this.value = value;
@@ -122,12 +142,12 @@ export default class BlobField extends Field {
     }
     override async handleUploadedValue(file: File) {
         const blob = new Blob([file], { type: file.type });
-        this.state.codeOptions.expanded = blob.size < isLarge('blob');
+        this.formatterMgr.setOptions('code', { compacted: blob.size >= isLarge('blob') });
         this.update(blob);
     }
-    override toSourceValue(expanded: boolean): string {
-        if (!expanded) return 'return value;';
-        const options = this.formOptions({ expanded });
+    override toSourceValue(compacted: boolean): string {
+        if (compacted) return 'return value;';
+        const options = this.formOptions({ compacted });
         const arr = formattedNumericArray(
             new Uint8Array(this.buffer),
             'uint8array',
@@ -149,10 +169,13 @@ is initialized with zeros.`,
     isLarge() {
         return this.value.size > isLarge(this.state.type);
     }
-    override defaultValueOptions(): FormatterOptions {
-        return {
-            ...super.defaultValueOptions(),
-            offset: 4,
-        };
+    override defaultOptionsOverrides: Partial<FormatterOptions> = {
+        offset: 4,
+    };
+    override focus(): void {
+        super.focus(this.nodeBlobSize.value);
+    }
+    override isVeryLargeValue(): boolean {
+        return this.value.size >= VERY_LARGE_VALUE;
     }
 }

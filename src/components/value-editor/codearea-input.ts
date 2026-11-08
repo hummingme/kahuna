@@ -9,8 +9,8 @@ import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import optionsIcon from '#components/value-editor/options-icon';
 import Field from '#components/value-editor/fields/field';
-import { JsCodearea, type RequiredVariables } from '#components/js-codearea';
-import type { AppTarget, UnknownRecord } from '#types';
+import { JsCodearea } from '#components/js-codearea';
+import type { AppTarget, UnknownRecord, RequiredVariables } from '#types';
 import { isExpandable } from '#lib/datatype-attributes';
 
 type InitArgs = {
@@ -31,20 +31,18 @@ export default class CodeareaInput {
     async init(args: InitArgs) {
         await this.codearea.init({
             ...args,
-            user: 'valueEditorField',
-            enabled: true,
+            user: 'editValue',
             executed: (result: unknown) => {
-                this.field.valid = true;
                 this.field.update(result, { updateCodearea: false });
             },
         });
         this.updateCode({ savedIndex: -1 });
     }
-    get expanded() {
-        return this.field.state.codeOptions.expanded;
+    get compacted() {
+        return this.field.codeOptions().compacted;
     }
     updateCode(options: UnknownRecord = {}) {
-        const code = this.field.toSourceValue(this.expanded);
+        const code = this.field.toSourceValue(this.compacted);
         this.codearea.update(Object.assign({ code }, options));
     }
     isEmpty() {

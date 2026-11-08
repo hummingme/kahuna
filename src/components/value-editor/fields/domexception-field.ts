@@ -15,33 +15,30 @@ import type { FormatterOptions } from '#lib/value-formatter';
 export default class DomexceptionField extends Field {
     nodeMessage: Ref<HTMLInputElement> = createRef();
     nodeName: Ref<HTMLInputElement> = createRef();
-    view() {
+    formView() {
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    <div class="form-wrapper">
-                        <div>
-                            ${textInput(this, {
-                                id: 'domexception-message',
-                                '.value': this.toFormString(this.value.message),
-                                size: 25,
-                                label: 'message',
-                                refVar: this.nodeMessage,
-                            })}
-                            ${textInput(this, {
-                                id: 'domexception-name',
-                                '.value': this.toFormString(this.value.name),
-                                size: 25,
-                                list: 'standardnames-list',
-                                label: 'name',
-                                refVar: this.nodeName,
-                            })}
-                            ${this.standardNamesDatalist()}
-                        </div>
-                        <div class="value-icons">${optionsIcon(this, 'form')}</div>
-                    </div>
+            <div class="form-wrapper">
+                <div>
+                    ${textInput(this, {
+                        id: 'field-value-domexception-message',
+                        '.value': this.toFormString(this.value.message),
+                        classes: ['resizable'],
+                        style: 'width: 20ch;',
+                        label: 'message',
+                        refVar: this.nodeMessage,
+                    })}
+                    ${textInput(this, {
+                        id: this.valueInputId('name'),
+                        '.value': this.toFormString(this.value.name),
+                        classes: ['resizable'],
+                        style: 'width: 20ch;',
+                        list: 'standardnames-list',
+                        label: 'name',
+                        refVar: this.nodeName,
+                    })}
+                    ${this.standardNamesDatalist()}
                 </div>
-                ${this.inputMethodView()}
+                <div class="value-icons">${optionsIcon(this, 'form')}</div>
             </div>
         `;
     }
@@ -81,16 +78,14 @@ export default class DomexceptionField extends Field {
         super.updateFormFieldValue(options);
         msgNode.value = this.toFormString(this.value.message);
         nameNode.value = this.toFormString(this.value.name);
-        const disabled = this.inputMethod !== 'form' || !this.state.formOptions.expanded;
+        const disabled =
+            this.inputMethod !== 'form' || this.formatterMgr.getFormOptions().compacted;
         msgNode.disabled = nameNode.disabled = disabled;
     }
-    override defaultValueOptions(): FormatterOptions {
-        return {
-            ...super.defaultValueOptions(),
-            escapeNonCharacters: true,
-            unescapedLineFeeds: false,
-        };
-    }
+    override defaultOptionsOverrides: Partial<FormatterOptions> = {
+        escapeNonCharacters: true,
+        escapeLf: true,
+    };
     standardNamesDatalist() {
         return html`
             <datalist id="standardnames-list">
@@ -136,4 +131,7 @@ export default class DomexceptionField extends Field {
         'VersionError',
         'WrongDocumentError',
     ] as const;
+    override focus(): void {
+        super.focus(this.nodeMessage.value);
+    }
 }

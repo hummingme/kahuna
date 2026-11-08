@@ -13,13 +13,13 @@ import type {
     SelectOption,
     InputOption,
 } from '#components/config/types';
+import checkbox from '#components/parts/checkbox';
+import { selectbox } from '#components/parts/selectbox';
+import svgIcon from '#components/parts/svgicon';
+import textinput from '#components/parts/textinput';
 import { isGlobal, isDatabase } from '#lib/app-target';
-import checkbox from '#lib/checkbox';
 import settings from '#lib/settings';
 import { pickProperties } from '#lib/utils';
-import { selectbox } from '#lib/selectbox';
-import svgIcon from '#lib/svgicon';
-import textinput from '#lib/textinput';
 import {
     AppTarget,
     SerializedSettingValues,
@@ -142,14 +142,16 @@ const Config = class {
     optionInputView(args: InputOption) {
         const { label, ...props } = args;
         const name = props.name;
+        const classes = args.type !== 'number' ? ['resizable'] : [];
         props['@change'] ??= this.inputOptionChanged.bind(this, name);
-        const textInput = textinput(
+        const input = textinput(
             Object.assign(props, {
                 '.value': this.state[name],
+                classes,
             }),
         );
         return html`
-            <p>${textInput} ${this.optionLabel(name, label)}</p>
+            <p>${input.view()} ${this.optionLabel(name, label)}</p>
         `;
     }
     selectOptionsView() {
@@ -175,6 +177,7 @@ const Config = class {
         const remembered = this.#control.rememberedSettings;
         const defaults = this.state.defaults;
         if (!remembered || name in defaults === false) return '';
+
         const modifiedIcon = settings.isEqualSetting(this.state[name], remembered[name])
             ? ''
             : this.modifiedIcon();

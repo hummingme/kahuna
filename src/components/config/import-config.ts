@@ -6,15 +6,15 @@
 import { html } from 'lit-html';
 
 import Config from '#components/config/config';
+import { importDefaultOptions, type ImportOptions } from './import-defaults';
 import type {
     ControlInstance,
-    ImportOptions,
     InputOption,
     Option,
     OptionName,
     SelectOption,
 } from '#components/config/types';
-import infoIcon from '#lib/info-icon';
+import infoIcon from '#components/parts/info-icon';
 import settings from '#lib/settings';
 import { selfMap } from '#lib/utils';
 import { AppTarget, DATA_FORMATS, EMPTY_AS, SettingSubject } from '#types';
@@ -71,8 +71,16 @@ export default class ImportConfig extends Config {
         },
     ];
     inputOptions: InputOption[] = [
-        { name: 'primaryKeyName', label: 'primary key name', size: 15 },
-        { name: 'directValuesName', label: 'direct values name', size: 15 },
+        {
+            name: 'primaryKeyName',
+            label: 'primary key name',
+            id: 'import-config-pk-name',
+        },
+        {
+            name: 'directValuesName',
+            label: 'direct values name',
+            id: 'import-config-dv-name',
+        },
     ];
     view() {
         return html`
@@ -132,20 +140,3 @@ JSON import into tables with unnamed primary key.`;
         return importDefaultOptions();
     }
 }
-
-export const importDefaultOptions = () => {
-    return {
-        dataImportFormat: 'dexie', // fixed for database, for table could be also csv and json
-        primaryKeyName: 'key', // for csv & json, if pk is unnamed
-        importDirectValues: false, // for csv & json
-        directValuesName: 'value', // for csv & json
-        importEmptyAs: 'empty string', // |'null', 'undefined', 'exclude' ; for csv
-        clearTablesBeforeImport: false, // database & table, all formats
-        overwriteValues: false, // database & table, all formats
-        acceptNameDiff: true, // database & table, for dexie
-        acceptVersionDiff: true, // database & table, for dexie
-        acceptChangedPrimaryKey: true, // database & table, for dexie
-        acceptMissingTables: true, // database, for dexie
-        noTransaction: false, // database & table, for dexie
-    };
-};

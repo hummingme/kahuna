@@ -1,10 +1,31 @@
-# v1.6.2
-- released on 2026/08/19
-- bugfix: the data and database import in Dexie format was fixed for Firefox browser.
-
-# v1.6.1
-- released on 2026/07/22
-- bugfix: ensure that when editing data values, the correct column is updated, even if there are hidden columns.
+# v1.7.0
+- Released on 2026/11/08
+- Added a JavaScript console in a separate layer, accessible via a menu bar icon, replacing the JavaScript textarea below the Datatable grid.
+- Added the JavaScript console also to the Origin and Database views.
+- All text input fields are now resizable with the mouse, and their widths are saved persistently.
+- ValueEditor: Text and JSON string fields are now displayed as resizable single-line inputs or textareas, depending on whether the value contains line breaks. Pressing Ctrl+Enter in a single-line input inserts a line break and switches to a textarea.
+- ValueEditor: Improved form input performance for Blob, ArrayBuffer, DataView, and ImageData values. JavaScript source input is always initially displayed in compacted mode for buffers larger than 1 MB.
+- ValueEditor: The first input field is now focused during initialization and whenever the value type or input method is changed.
+- ValueEditor: Added `binary` as a supported character encoding for text file uploads and string downloads, for cases where the string should not be converted.
+- ValueEditor: Renamed the `unescapedLineFeeds` formatting option to `escapeLineFeeds`. Added a seperate `escapeCariageReturn` option.
+- ValueEditor: Added datepicker-based editing of Date values and integer values in date-formatted columns.
+- Added a datepicker filter for columns containing Date objects or timestamps formatted as dates.
+- Added a span option to year, month, and day date filters, allowing them to be applied as period filters.
+- Multiple filters on the same indexed field are now combined where possible to speed up queries.
+- Escape sequences in filter inputs are now interpreted, allowing control and non-printable characters to be matched.
+- Filter entries where the first character is an apostrophe result in an explicit string search.
+- Filter entries of special number names such as Infinity, Math.PI, Number.MAX_VALUE, etc., are now interpreted.
+- Added a configuration option to escape all non-ASCII characters in the Datatable view.
+- SchemaEditor: Field input is now validated as you type rather than only when leaving the field.
+- Standard-compliant key path segment validation is now used in the SchemaEditor and when creating tables/object stores. Reserved JavaScript words are now allowed.
+- Added input validation to the create new database form.
+- Databases in the Origin view are now sorted alphabetically.
+- Fixed an issue where deleting the export filename from the input field also removed the export filename template from the configuration.
+- Fixed an issue where the webworker execution method was offered even when CSP rules prevented unsafe evaluation in workers.
+- Fixed an issue where workers could not be used for code execution if their start triggered SecurityPolicyViolationEvent events caused by report only CSP rules.- 
+- Changed the codeExecutionMethod option in the behavior configuration to not display a selectbox if no code execution methods are allowed. 
+- Removed the displayCodearea and codeareaPlaceholder from the behavior configuration options.
+- The TypeScript target library `es2025` is now used, and therefore the minimum required browser versions have been increased to Firefox 134 and Chrome 128.
 
 # v1.6.0
 - released on 2026/07/14

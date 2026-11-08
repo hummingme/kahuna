@@ -5,23 +5,13 @@
 
 import type { Collection, IndexSpec, Table } from 'dexie';
 
+import { applyFilters } from './apply-filters';
 import { getConnection } from '#lib/connection';
+import { getType } from '#lib/datatypes';
 import { collectionToArray } from '#lib/dexie-utils';
-import {
-    getFuncFilter,
-    getFuncIndexed,
-    isIndexedFilter,
-    isCompoundHeadIndexed,
-} from '#lib/filter';
-import { hasIntersection, resolvePath } from '#lib/utils';
-import {
-    indexedMethods,
-    type Filter,
-    type IndexedMethod,
-    type IndexedWhereClauseMethods,
-    type QueryDataArgs,
-    type UnknownRecord,
-} from '#types';
+import { getFuncIndexed, isIndexedFilter } from '#lib/filter';
+import { resolvePath } from '#lib/utils';
+import { Filter, QueryDataArgs, UnknownRecord } from '#types';
 
 export const queryData = async (args: QueryDataArgs) => {
     const dbHandle = await getConnection(args.dbname);
@@ -29,7 +19,12 @@ export const queryData = async (args: QueryDataArgs) => {
     args = sanitizeArguments(args);
 
     return await dbHandle.transaction('r', args.tablename, async () => {
-        const result = applyFilters(dexieTable, args.filters);
+        const result = applyFilters(
+            dexieTable,
+            args.filters,
+            args.columns,
+            args.useLocalTimezone,
+        );
         const ordered = isCollection(result)
             ? await orderCollection(result, args)
             : await orderDexieTable(result, args);
@@ -37,212 +32,6 @@ export const queryData = async (args: QueryDataArgs) => {
         const data = await paginateData(ordered, args);
         return { data, total };
     });
-};
-
-export const applyFilters = (
-    dexieTable: Table,
-    filters: Filter[],
-): Collection | Table => {
-    filters = filters.filter((f) => f.search !== '' && f.valid);
-    if (filters.length !== 0) {
-        let collection: Collection;
-        filters = optimizeApplyOrder(filters);
-        if (filters[0].field === '*key*') {
-            collection = applyUnnamedPkFilters(dexieTable, filters);
-            filters = filters.filter((f) => f.field !== '*key*');
-        } else {
-            const filter = filters.shift()!;
-            const search = prepareSearchValue(filter);
-            if (isIndexedFilter(filter)) {
-                const where = dexieTable.where(filter.field);
-                const indexedFunc = getFuncIndexed(filter) as IndexedWhereClauseMethods;
-                collection = where[indexedFunc](search as any);
-            } else {
-                const func = filterFunc(filter);
-                collection = dexieTable.filter((item) => func(item, search));
-            }
-        }
-        filters.forEach((filter) => {
-            const func = filterFunc(filter);
-            const search = prepareSearchValue(filter);
-            collection = collection.filter((item) => func(item, search));
-        });
-        return collection;
-    } else {
-        return dexieTable;
-    }
-};
-
-interface Constraints {
-    above: Set<CVal>;
-    below: Set<CVal>;
-    equal: Set<CVal>;
-    notequal: Set<CVal>;
-}
-type ConstraintIndex = keyof Constraints;
-type CVal = number | string;
-
-const applyUnnamedPkFilters = (dexieTable: Table, filters: Filter[]): Collection => {
-    const constraints: Constraints = {
-        above: new Set(),
-        below: new Set(),
-        equal: new Set(),
-        notequal: new Set(),
-    };
-    filters
-        .filter((f) => f.field === '*key*')
-        .forEach((f) => {
-            const method = f.method as ConstraintIndex;
-            let value = Number.isNaN(Number(f.search)) ? f.search : Number(f.search);
-            if (f.includeBounds === false) {
-                if (f.method === 'above') value = increaseConstraint(value);
-                if (f.method === 'below') value = decreaseConstraint(value);
-            }
-            constraints[method].add(value);
-        });
-    const below = [...constraints.below].sort(compareConstraint).shift() || '\uffff';
-    const above = [...constraints.above].sort(compareConstraint).pop() || -Infinity;
-
-    if (impossibleUnnamedPkFilters(constraints)) {
-        return emptyCollection(dexieTable);
-    }
-    if (constraints.equal.size > 0) {
-        return applyUnnamedPkWithEqual(constraints, below, above, dexieTable);
-    } else if (constraints.notequal.size > 0) {
-        return applyUnnamedPkWithNotEquals(constraints, below, above, dexieTable);
-    } else {
-        return dexieTable.where(':id').between(above, below, true, true);
-    }
-};
-
-const impossibleUnnamedPkFilters = (constraints: Constraints): boolean => {
-    return (
-        constraints.equal.size > 1 ||
-        hasIntersection(constraints.equal, constraints.notequal)
-    );
-};
-
-const applyUnnamedPkWithEqual = (
-    constraints: Constraints,
-    below: CVal,
-    above: CVal,
-    dexieTable: Table,
-): Collection => {
-    const [equal] = constraints.equal;
-    if (compareConstraint(equal, above) === -1 || compareConstraint(equal, below) === 1) {
-        return emptyCollection(dexieTable);
-    } else {
-        return dexieTable.where(':id').equals(equal);
-    }
-};
-
-const applyUnnamedPkWithNotEquals = (
-    constraints: Constraints,
-    below: CVal,
-    above: CVal,
-    dexieTable: Table,
-): Collection => {
-    const notEquals = [...constraints.notequal].sort(compareConstraint);
-    const insideRange = notEquals.filter(
-        (value) =>
-            compareConstraint(value, above) === 1 &&
-            compareConstraint(value, below) === -1,
-    );
-    if (insideRange.length === 0) {
-        return dexieTable.where(':id').between(above, below);
-    } else {
-        const ranges: [CVal, CVal][] = Array(insideRange.length + 1)
-            .fill(null)
-            .map((_) => [0, 0]);
-        ranges[0][0] = decreaseConstraint(above);
-        for (let idx = 0; idx < insideRange.length; idx++) {
-            ranges[idx][1] = insideRange[idx];
-            ranges[idx + 1][0] = insideRange[idx];
-        }
-        ranges[insideRange.length][1] = increaseConstraint(below);
-        return dexieTable.where(':id').inAnyRange(ranges, { includeLowers: false });
-    }
-};
-
-const MIN_FLOAT = 0.00000000000001; // floats have at least 15 significant digits
-
-const increaseConstraint = (value: CVal): CVal => {
-    if (typeof value === 'number') {
-        return value + MIN_FLOAT;
-    } else {
-        const last = value.codePointAt(value.length - 1)!;
-        return last < 0xffff
-            ? value.slice(0, -1) + String.fromCodePoint(last + 1)
-            : value + String.fromCodePoint(1);
-    }
-};
-
-const decreaseConstraint = (value: CVal): CVal => {
-    if (typeof value === 'number') {
-        return value - MIN_FLOAT;
-    } else {
-        const last = value.codePointAt(value.length - 1)!;
-        return last === 1
-            ? value.slice(0, -2) + String.fromCodePoint(0xffff)
-            : value.slice(0, -1) + String.fromCodePoint(last - 1);
-    }
-};
-
-const compareConstraint = (a: CVal, b: CVal): number => {
-    if (typeof a === typeof b) {
-        return a >= b ? 1 : -1;
-    } else {
-        return typeof a === 'string' ? 1 : -1;
-    }
-};
-
-const emptyCollection = (dexieTable: Table) => {
-    return dexieTable.where(':id').below(-Infinity);
-};
-
-const optimizeApplyOrder = (filters: Filter[]) => {
-    return filters.sort((a, b) => {
-        // '*key*' filters must be applied first, because ':id' can be used
-        // in table.where() but not in collection.filter()
-        if (a.field === '*key*' || b.field === '*key*') {
-            return a.field === '*key*' ? -1 : 1;
-        }
-        const aIndexed = a.indexed && !!getFuncIndexed(a);
-        const bIndexed = b.indexed && !!getFuncIndexed(b);
-        if (aIndexed !== bIndexed) {
-            return aIndexed ? -1 : 1;
-        }
-        if (aIndexed && bIndexed) {
-            return (
-                indexedMethods.indexOf(a.method as IndexedMethod) -
-                indexedMethods.indexOf(b.method as IndexedMethod)
-            );
-        }
-        if (!a.indexed && !b.indexed) {
-            return isCompoundHeadIndexed(a) ? -1 : 1;
-        }
-        return Number.MAX_SAFE_INTEGER;
-    });
-};
-
-const filterFunc = (filter: Filter) => {
-    const func = getFuncFilter(filter);
-    if (filter.field.includes('.')) {
-        return (a: any, b: any) => func(resolvePath(a, filter.field), b);
-    } else if (filter.field === '*value*') {
-        return func;
-    } else {
-        return (a: any, b: any) => func(a[filter.field], b);
-    }
-};
-
-const prepareSearchValue = ({ search, method }: { search: string; method: string }) => {
-    if (Number.isNaN(Number(search)) === false) {
-        if (['equal', 'notequal', 'below', 'above'].includes(method)) {
-            return +search;
-        }
-    }
-    return search;
 };
 
 const orderCollection = async (
@@ -263,11 +52,14 @@ const orderCollection = async (
             const vb = b[order];
             if (va === null) return down;
             if (vb === null) return up;
-            if (typeof va === 'number' && typeof vb === 'number') {
+            if (
+                (typeof va === 'number' && typeof vb === 'number') ||
+                (va && vb && getType(va) === 'date' && getType(vb) === 'date')
+            ) {
                 return va > vb ? up : down;
             }
 
-            return String(va).localeCompare(String(vb)) < 0 ? up : down;
+            return String(va).localeCompare(String(vb)) > 0 ? up : down;
         });
     }
     return data;

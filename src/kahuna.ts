@@ -6,7 +6,7 @@
 import { html, render } from 'lit-html';
 
 import appWindow from '#components/app-window';
-import Breadcrumb from '#components/breadcrumb';
+import WindowToolbar from '#components/window-toolbar';
 import configLayer from '#components/configlayer';
 import Database from '#components/database';
 import datatable from '#components/datatable';
@@ -40,22 +40,10 @@ try {
     const init = async () => {
         messenger.register('reloadApp', reloadApp);
         messenger.register('rerenderApp', rerenderApp);
-        window.addEventListener('error', function (event) {
-            handleGlobalError(event);
-        });
-        window.addEventListener('unhandledrejection', function (event) {
-            handleGlobalError(event);
-        });
-        window.addEventListener('securitypolicyviolation', function (event) {
-            handleGlobalError(event);
-        });
         await settings.init();
-        const worker = await appWorker.start();
-        if (!worker) {
-            env.workersBlocked = true;
-        }
-        env.init();
-        appWindow.init();
+        await checkWorkers();
+        await env.init();
+        await appWindow.init();
         await appStore.init();
         startupCheckings();
         return;
@@ -82,7 +70,7 @@ function renderApp(appwin: typeof appWindow, state: AppState) {
     }
     render(
         html`
-            ${Breadcrumb.view({ selectedDB, selectedTable, databases })}
+            ${WindowToolbar.view({ selectedDB, selectedTable, databases })}
             <div id="main">${stage}</div>
         `,
         winNode,
@@ -103,9 +91,23 @@ async function reloadApp() {
     }
 }
 
-type GlobalErrorEvent = ErrorEvent | PromiseRejectionEvent | SecurityPolicyViolationEvent;
+async function checkWorkers() {
+    window.addEventListener('securitypolicyviolation', handleSecurityPoliceVilolation);
+    setTimeout(
+        () =>
+            window.removeEventListener(
+                'securitypolicyviolation',
+                handleSecurityPoliceVilolation,
+            ),
+        2000,
+    );
+    const worker = await appWorker.start();
+    if (!worker) {
+        env.workersBlocked = true;
+    }
+}
 
-const handleGlobalError = async (event: GlobalErrorEvent) => {
+async function handleSecurityPoliceVilolation(event: Event) {
     if (isSecurityPolicyViolationEvent(event)) {
         env.workersBlocked = true;
         appWorker.terminate();
@@ -115,14 +117,16 @@ const handleGlobalError = async (event: GlobalErrorEvent) => {
         // eslint-disable-next-line no-console
         console.error('catched global error', event);
     }
-};
+}
 
 const isSecurityPolicyViolationEvent = (
-    event: GlobalErrorEvent,
+    event: Event,
 ): event is SecurityPolicyViolationEvent => {
     return (
         event.type === 'securitypolicyviolation' &&
         'violatedDirective' in event &&
+        'disposition' in event &&
+        event.disposition === 'enforce' &&
         'blockedURI' in event &&
         event.violatedDirective === 'worker-src' &&
         event.blockedURI === 'blob'

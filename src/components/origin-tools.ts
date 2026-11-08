@@ -9,76 +9,134 @@ import Origin from '#components/origin';
 import importer from '#components/importer';
 import configLayer from '#components/configlayer';
 import messageStack from '#components/messagestack';
+import textinput from '#components/parts/textinput';
+import { toolEntry, focusButton } from '#components/parts/tool-entry';
 import appStore from '#lib/app-store';
 import { getConnection, getDB } from '#lib/connection';
-import { unescapeUnicode } from '#lib/escape-unicode';
+import { print, unescapeString } from '#lib/escape-string';
 import messenger from '#lib/messenger';
-import svgIcon from '#lib/svgicon';
-import { PlainObject } from '#types';
+import { validateIndexesString } from '#lib/validations';
+import { PlainObject, Textinput } from '#types';
 
 const summon = async (anchorId: string) => {
     await importer.init({
         usage: 'origin',
         target: { database: '*', table: '*' },
     });
-    configLayer.show({ view, anchorId });
+    configLayer.show({
+        view,
+        anchorId,
+        onReady: configlayerReady,
+    });
+};
+const configlayerReady = (_layer: HTMLDivElement) => {
+    if (dbNameInput) {
+        dbNameInput.setCustomValidity(getDatabaseNameError(''));
+        updateCreateButtonState();
+    }
 };
 
 const view = (): TemplateResult => {
     const topic = configLayer.topic;
     return html`
-        <p>
-            <a @click=${configLayer.onTopicClicked} data-topic="import">
-                ${svgIcon('tabler-download')}
-                <label>import database</label>
-            </a>
-            ${topic === 'import' ? importer.panel() : ''}
-        </p>
-        <p>
-            <a @click=${configLayer.onTopicClicked} data-topic="create">
-                ${svgIcon('tabler-square-rounded-plus')}
-                <label>create database</label>
-            </a>
-            ${topic === 'create' ? createPanel() : ''}
-        </p>
+        ${toolEntry({
+            label: 'import database',
+            topic: 'import',
+            panelOpen: topic === 'import',
+            iconName: 'tabler-download',
+            panelView: importer.panel.bind(importer),
+            refVar: focusButton,
+        })}
+        ${toolEntry({
+            label: 'create database',
+            topic: 'create',
+            panelOpen: topic === 'create',
+            iconName: 'tabler-square-rounded-plus',
+            panelView: createPanel,
+        })}
     `;
 };
 
-const createPanel = (): TemplateResult => {
-    const content = html`
-        <div>
-            <div>
-                <label for="create-dbname">database name</label>
-                <input type="text" id="create-dbname" class="right" size="15" />
-            </div>
-            <div>
-                <label for="create-tablename">table name</label>
-                <input type="text" id="create-tablename" class="right" size="15" />
-            </div>
-            <div>
-                <label for="create-indexes">indexes</label>
-                <input type="text" id="create-indexes" class="right" size="15" />
-            </div>
-        </div>
-    `;
+let dbNameInput: Textinput | undefined;
 
-    const button = { label: 'create', handler: createDatabase };
+const createPanel = (): TemplateResult => {
+    dbNameInput = textinput({
+        id: 'create-db-name',
+        classes: ['resizable'],
+        '@input': onDatabaseNameInput,
+    });
+    const content = html`
+        <form>
+            <div class="form-grid">
+                <label for="create-db-name">database name</label>
+                ${dbNameInput.view()}
+                <label for="create-db-tablename">table name</label>
+                ${textinput({ id: 'create-db-tablename', classes: ['resizable'] }).view()}
+                <label for="create-db-indexes">indexes</label>
+                ${textinput({
+                    id: 'create-db-indexes',
+                    classes: ['resizable'],
+                    '@input': onTableIndexesInput,
+                }).view()}
+            </div>
+        </form>
+    `;
+    const button = {
+        label: 'create',
+        handler: createDatabase,
+        id: 'create_db_button',
+    };
 
     return configLayer.panel(content, button);
 };
 
+const onDatabaseNameInput = (input: Textinput): void => {
+    const name = input.node.value.trim();
+    const message = getDatabaseNameError(name);
+    input.node.setCustomValidity(message);
+    updateCreateButtonState();
+};
+
+const getDatabaseNameError = (name: string): string => {
+    if (name.length === 0) return 'enter a name for the new database';
+    if (appStore.state.databases.some((db) => db.name === name)) {
+        return `the database ${print(name)} already exists`;
+    }
+    return '';
+};
+
+const onTableIndexesInput = (input: Textinput): void => {
+    const indexes = input.node.value.trim();
+    input.node.setCustomValidity(getTableIndexesError(indexes));
+    updateCreateButtonState();
+};
+
+const getTableIndexesError = (indexes: string): string => {
+    return validateIndexesString(indexes) ? '' : 'invalid index specification';
+};
+
+const updateCreateButtonState = () => {
+    const layer = configLayer.getNode();
+    if (!layer) return;
+    const form = layer.querySelector<HTMLFormElement>('form');
+    const button = layer.querySelector<HTMLButtonElement>('#create_db_button');
+    if (form && button) {
+        button.disabled = !form.checkValidity();
+    }
+};
+
 const createDatabase = async () => {
     const node = configLayer.getNode();
-    if (node === undefined) return;
-    const dbnameInput = node.querySelector<HTMLInputElement>('#create-dbname');
-    const tablenameInput = node.querySelector<HTMLInputElement>('#create-tablename');
-    const indexesInput = node.querySelector<HTMLInputElement>('#create-indexes');
+    if (!node) return;
+    const dbnameInput = node.querySelector<HTMLInputElement>('#create-db-name');
+    const tablenameInput = node.querySelector<HTMLInputElement>('#create-db-tablename');
+    const indexesInput = node.querySelector<HTMLInputElement>('#create-db-indexes');
     if (!dbnameInput || !tablenameInput || !indexesInput) return;
 
-    const dbname = unescapeUnicode(dbnameInput.value.trim());
+    const dbname = unescapeString(dbnameInput.value.trim());
     if (dbname.length === 0) return;
 
-    const tablename = unescapeUnicode(tablenameInput.value.trim());
+    const tablename = unescapeString(tablenameInput.value.trim());
     const indexes = indexesInput.value.trim();
     try {
         const db = getDB(dbname);

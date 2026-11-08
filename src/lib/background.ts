@@ -9,8 +9,10 @@ import {
     exportSettings,
     getDatabaseTablesColumns,
     getSettings,
+    getTextinputWidths,
     importSettings,
     putSettings,
+    putTextinputWidth,
 } from '#lib/settings-database';
 import type { AppTarget, Message, SettingKey, UnknownRecord } from '#types';
 
@@ -32,6 +34,11 @@ export const messageListener = async (
     } else if (type === 'requestSettings') {
         const values = await getSettings(msg.key);
         port.postMessage({ type: 'obtainSettings', values, id: msg.id });
+    } else if (type === 'requestTextinputWidths') {
+        const widths = await getTextinputWidths();
+        port.postMessage({ type: 'textinputWidthsResults', widths });
+    } else if (type === 'saveTextinputWidth') {
+        putTextinputWidth(msg.width);
     } else if (type === 'resetSettings') {
         clearSettings(msg.target);
     } else if (type === 'exportSettings') {

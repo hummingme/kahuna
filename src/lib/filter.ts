@@ -5,25 +5,26 @@
 
 import type { Table } from 'dexie';
 
-import type { Column } from '#lib/column';
 import { isPrimKeyNamed, isPrimKeyCompound } from '#lib/dexie-utils';
 import { getType, isEmptyObject } from '#lib/datatypes';
 import { ValueFormatter } from '#lib/value-formatter';
+import type { Column } from '#types';
 import {
-    caseSensitiveMethods,
-    compoundHeadIndexedMethods,
-    CompoundHeadIndexedMethod,
     indexedMethods,
+    isGenericMethod,
+    isStringOnlyMethod,
+    type BaseFilter,
     type Filter,
     type FilterDefaultOptions,
     type FilterEmptyMethod,
     type FilterMethod,
     type IndexedMethod,
+    type IndexedWhereClauseMethod,
 } from '#types/filter';
 
 type FilterMethodProps = {
     short: string;
-    funcFilter: (a: unknown, b: string | number) => boolean;
+    funcFilter: (a: unknown, b: string | number | Date) => boolean;
     funcIndexed?: string;
 };
 
@@ -32,19 +33,17 @@ export const defaultFilterOptions = (): FilterDefaultOptions => ({
     caseSensitive: true,
     includeBounds: false,
     empty: ['undefined', 'null'],
+    datepicker: false,
+    datespan: false,
 });
 
-export const emptyFilter = (): Filter =>
-    Object.assign(
-        {
-            field: '',
-            search: '',
-            indexed: false,
-            compoundHead: false,
-            valid: true,
-        },
-        defaultFilterOptions(),
-    );
+export const emptyFilter = (): Filter => ({
+    field: '',
+    search: '',
+    indexed: false,
+    valid: true,
+    ...defaultFilterOptions(),
+});
 
 export const filterCheckboxes = [
     'caseSensitive',
@@ -70,14 +69,19 @@ export const initialFilter = (columns: Column[], dexieTable: Table): Filter => {
         }
     }
     const column = columns.filter((c) => c.name === name)[0] || columns[0];
-    return Object.assign(emptyFilter(), {
+    return {
+        ...emptyFilter(),
         field: column.name,
         indexed: column.indexed,
-        compoundHead: column.compoundHead,
-    });
+    };
 };
 
 const stringFormatter = new ValueFormatter('string');
+const renderOptions = {
+    escapeNonCharacters: false,
+    escapeCR: false,
+    escapeBackslash: false,
+};
 
 export const searchMethods = () => ({
     equal: {
@@ -118,17 +122,17 @@ export const searchMethods = () => ({
         short: '..%',
         funcIndexed: 'startsWith',
         funcFilter: (a: unknown, b: string) =>
-            stringFormatter.render(a, getType(a)).startsWith(b),
+            stringFormatter.render(a, getType(a), renderOptions).startsWith(b),
     },
     endswith: {
         short: '%..',
         funcFilter: (a: unknown, b: string) =>
-            stringFormatter.render(a, getType(a)).endsWith(b),
+            stringFormatter.render(a, getType(a), renderOptions).endsWith(b),
     },
     contains: {
         short: '%..%',
         funcFilter: (a: unknown, b: string) => {
-            return stringFormatter.render(a, getType(a)).includes(b);
+            return stringFormatter.render(a, getType(a), renderOptions).includes(b);
         },
     },
     empty: {
@@ -143,14 +147,14 @@ export const searchMethods = () => ({
 
 const regexpFunc = (filter: Filter) => {
     const flags = filter.caseSensitive ? '' : 'i';
-    const rx = new RegExp(filter.search, flags);
-    return (a: unknown) => rx.test(stringFormatter.render(a, getType(a)));
+    const rx = new RegExp(String(filter.search), flags);
+    return (a: unknown) => rx.test(stringFormatter.render(a, getType(a), renderOptions));
 };
 
-const emptyFunc = (filter: Filter) => {
+const emptyFunc = (filter: BaseFilter) => {
     const emptyCheck = emptyCheckFunc(filter.empty);
     // a: data value; b: filter value
-    return (a: unknown, b: string | number) => {
+    return (a: unknown, b: string | number | Date) => {
         if (typeof b === 'string' && ['yes', 'no'].includes(b)) {
             return b === 'yes' ? emptyCheck(a) : !emptyCheck(a);
         } else {
@@ -184,10 +188,16 @@ const emptyCheckFunc = (checks: FilterEmptyMethod[]): ((arg0: unknown) => boolea
     };
 };
 
-export const getFuncFilter = (filter: Filter) => {
+export const getFuncFilter = (filter: BaseFilter, column: Column) => {
+    if (filter.datepicker && column.format !== 'date' && column.format !== 'date/1000') {
+        return (a: Date, b: unknown) => {
+            if (!(b instanceof Date)) return false;
+            return methodProperties(filter).funcFilter(a.valueOf(), b.valueOf());
+        };
+    }
     switch (filter.method) {
         case 'regexp':
-            return regexpFunc(filter);
+            return regexpFunc(filter as Filter);
         case 'empty':
             return emptyFunc(filter);
         default:
@@ -195,27 +205,32 @@ export const getFuncFilter = (filter: Filter) => {
     }
 };
 
-export const getFuncIndexed = (filter: Filter) => {
+export const getFuncIndexed = (
+    filter: BaseFilter,
+): IndexedWhereClauseMethod | undefined => {
     const funcIndexed = methodProperties(filter).funcIndexed;
-    if (typeof funcIndexed === 'string') {
-        if (
-            ['equals', 'startsWith'].includes(funcIndexed) &&
-            filter.caseSensitive === false
-        ) {
-            return `${funcIndexed}IgnoreCase`;
-        }
-        if (isIndexedMethod(filter.method)) {
-            return funcIndexed;
-        }
-    } else {
-        return;
+    if (typeof funcIndexed !== 'string' || !isIndexedMethod(filter.method)) {
+        return undefined;
     }
+    const method = appliesIgnoreCaseFunction(funcIndexed, filter.caseSensitive)
+        ? `${funcIndexed}IgnoreCase`
+        : funcIndexed;
+
+    return isGenericMethod(method) || isStringOnlyMethod(method) ? method : undefined;
 };
+
+export function appliesIgnoreCaseFunction(func: string, caseSensitive: boolean) {
+    return (func === 'equals' || func === 'startsWith') && caseSensitive === false;
+}
 
 /*
  * return { short, funcFilter, ?funcIndexed } for the given method
  */
-export const methodProperties = ({ method, includeBounds, caseSensitive }: Filter) => {
+export const methodProperties = ({
+    method,
+    includeBounds,
+    caseSensitive,
+}: BaseFilter) => {
     const methodProps = searchMethods()[method];
 
     const props: FilterMethodProps =
@@ -227,7 +242,7 @@ export const methodProperties = ({ method, includeBounds, caseSensitive }: Filte
         const func = props.funcFilter;
         props.funcFilter = (...args: unknown[]) => {
             const [a, b] = args.map((p) =>
-                stringFormatter.render(p, getType(p)).toLowerCase(),
+                stringFormatter.render(p, getType(p), renderOptions).toLowerCase(),
             );
             return func(a, b);
         };
@@ -250,12 +265,11 @@ export const isFilterValid = (val: string, filter: Filter) => {
     return true;
 };
 
-export const isIndexedFilter = (filter: Filter) => {
+export const isIndexedFilter = (filter: BaseFilter) => {
     const { indexed, method, caseSensitive } = filter;
     if (indexed) {
         if (method === 'notequal' && caseSensitive === true) return true;
         if (isIndexedMethod(method)) return true;
-        if (isCompoundHeadIndexed(filter)) return true;
     }
     return false;
 };
@@ -264,17 +278,21 @@ const isIndexedMethod = (method: FilterMethod): method is IndexedMethod => {
     return indexedMethods.includes(method as IndexedMethod);
 };
 
-export const isCompoundHeadIndexed = (filter: Filter) => {
-    const { compoundHead, method, caseSensitive } = filter;
-    return (
-        compoundHead === true &&
-        isCompoundHeadIndexedMethod(method) &&
-        (!caseSensitiveMethods.includes(method) || caseSensitive === true)
-    );
+export const filterColumn = (filterField: string, columns: Column[]) => {
+    const column = columns.find((c) => c.name === filterField);
+    if (!column) throw new Error('Cannot find filtered column!');
+    return column;
 };
 
-const isCompoundHeadIndexedMethod = (
-    method: FilterMethod,
-): method is CompoundHeadIndexedMethod => {
-    return compoundHeadIndexedMethods.includes(method as CompoundHeadIndexedMethod);
+export const datespanLabel = (filter: Filter) => {
+    const spanName = datespan(filter);
+    return `as ${spanName} span`;
+};
+
+export const datespan = (filter: Filter) => {
+    const dp = filter.datepicker;
+    if (dp === 'datetime' || dp === 'millisecond') {
+        return false;
+    }
+    return dp === 'date' ? 'day' : dp;
 };

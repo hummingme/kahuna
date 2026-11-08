@@ -3,20 +3,12 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
-
 import Field from '#components/value-editor/fields/field';
 import textInput from '#components/value-editor/text-input';
 
 export default class RegexpField extends Field {
-    view() {
-        return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(this, { id: 'regexp-value' })} ${this.inputMethodView()}
-                </div>
-            </div>
-        `;
+    formView() {
+        return textInput(this, { classes: ['resizable'], style: 'width: 20ch;' });
     }
     get value(): RegExp {
         return this.state.value as RegExp;
@@ -37,8 +29,8 @@ export default class RegexpField extends Field {
         return this.value.toString();
     }
     fromFormValue(): RegExp | undefined {
-        if (this.node.value instanceof HTMLInputElement) {
-            return this.fromString(this.node.value.value);
+        if (this.nodeInput instanceof HTMLInputElement) {
+            return this.fromString(this.nodeInput.value);
         }
     }
     fromString(value: string) {
@@ -50,7 +42,7 @@ export default class RegexpField extends Field {
         }
     }
     validate() {
-        const input = this.node.value;
+        const input = this.nodeInput;
         if (input instanceof HTMLInputElement) {
             let valid = false;
             const value = input.value.trim();

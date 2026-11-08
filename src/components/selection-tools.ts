@@ -8,21 +8,21 @@ import { html, type TemplateResult } from 'lit-html';
 import configLayer from '#components/configlayer';
 import exporter from '#components/exporter';
 import datatable, { type DatatableState } from '#components/datatable';
+import { symbolButton } from '#components/parts/button';
+import checkbox from '#components/parts/checkbox';
+import { toolEntry, focusButton } from '#components/parts/tool-entry';
+import { applyFilters } from '#lib/apply-filters';
 import appStore from '#lib/app-store';
-import { symbolButton } from '#lib/button';
-import checkbox from '#lib/checkbox';
 import {
     collectionToArray,
     dexieExportFilter,
     getCollection,
     isPrimKeyUnnamed,
 } from '#lib/dexie-utils';
-import { applyFilters } from '#lib/querydata';
-import svgIcon from '#lib/svgicon';
 import { rowSelector } from '#lib/row-selection';
-import { scrubblerDelete, scrubblerTopic } from '#lib/scrubbler';
+import { scrubblerDelete, scrubblerToolEntry } from '#lib/scrubbler';
 import { resolvePath } from '#lib/utils';
-import type { Filter, UnknownRecord } from '#types';
+import type { Column, Filter, UnknownRecord } from '#types';
 
 const summon = (anchorId: string) => {
     const { target, dexieTable, selectorFields, selected } = datatable.state;
@@ -76,39 +76,41 @@ const view = (): TemplateResult => {
     const count = datatable.state.selected.size;
     const topic = configLayer.topic;
     return html`
-        <p>
-            <a @click=${invertSelection} data-topic="invert">
-                ${svgIcon('tabler-switch')}
-                <label>invert selection</label>
-            </a>
-        </p>
-        <p>
-            <a @click=${clearSelection} data-topic="clear">
-                ${svgIcon('tabler-eraser')}
-                <label>clear selection</label>
-            </a>
-        </p>
-        <p>
-            <a @click=${configLayer.onTopicClicked} data-topic="delete">
-                ${svgIcon('tabler-trash')}
-                <label>delete selected rows</label>
-            </a>
-            ${topic == 'delete'
-                ? configLayer.confirmOption(
-                      `Delete ${count} selected rows from table`,
-                      table,
-                      loading,
-                  )
-                : ''}
-        </p>
-        <p>
-            <a @click=${configLayer.onTopicClicked} data-topic="export">
-                ${svgIcon('tabler-upload')}
-                <label>export data</label>
-            </a>
-            ${topic == 'export' ? exporter.panel() : ''}
-        </p>
-        ${scrubblerTopic(topic, count, loading)}
+        ${toolEntry({
+            label: 'invert selection',
+            topic: 'invert',
+            iconName: 'tabler-switch',
+            onClick: invertSelection,
+            aria: {},
+            refVar: focusButton,
+        })}
+        ${toolEntry({
+            label: 'clear selection',
+            topic: 'clear',
+            iconName: 'tabler-eraser',
+            onClick: clearSelection,
+            aria: {},
+        })}
+        ${toolEntry({
+            label: 'delete selected rows',
+            topic: 'delete',
+            panelOpen: topic === 'delete',
+            iconName: 'tabler-trash',
+            panelView: () =>
+                configLayer.confirmOption(
+                    `Delete ${count} selected rows from table`,
+                    table,
+                    loading,
+                ),
+        })}
+        ${toolEntry({
+            label: 'export data',
+            topic: 'export',
+            panelOpen: topic === 'export',
+            iconName: 'tabler-upload',
+            panelView: () => exporter.panel(),
+        })}
+        ${scrubblerToolEntry(topic, count, loading)}
     `;
 };
 
@@ -209,14 +211,17 @@ const pageSelectedChanged = (event: Event) => {
  * used by selection-tools: invertSelection
  */
 const invert = async (tstate: DatatableState) => {
-    const { dexieTable, filters, selectorFields, selected } = tstate;
+    const { dexieTable, filters, columns, selectorFields, selected, useLocalTimezone } =
+        tstate;
     if (!dexieTable) return;
     return datatable.doLoading(async () => {
         const inverted: Set<string | number> = new Set();
         const data = await getSelectableData({
             dexieTable: dexieTable,
-            filters,
+            filters: structuredClone(filters),
+            columns: structuredClone(columns),
             selectorFields,
+            useLocalTimezone,
         });
         data.forEach((row) => {
             const selector = rowSelector(selectorFields, row);
@@ -235,13 +240,17 @@ const invert = async (tstate: DatatableState) => {
 const getSelectableData = async ({
     dexieTable,
     filters,
+    columns,
     selectorFields,
+    useLocalTimezone,
 }: {
     dexieTable: Table;
     filters: Filter[];
+    columns: Column[];
     selectorFields: string[];
+    useLocalTimezone: boolean;
 }) => {
-    const collection = applyFilters(dexieTable, filters);
+    const collection = applyFilters(dexieTable, filters, columns, useLocalTimezone);
     const data = await collectionToArray(
         collection,
         isPrimKeyUnnamed(dexieTable.schema.primKey),

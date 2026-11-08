@@ -16,19 +16,17 @@ export default class UploadInput {
     view() {
         const icon = hintIcon(this.field, this.field.inputMethod);
         return html`
-            <div class="value">
-                <button class="upload" @click=${this.clickFileInput}>
-                    <label>load from file</label>
-                </button>
-                <input
-                    type="file"
-                    id="field-upload"
-                    @change=${this.getUploadedValue.bind(this)}
-                    class="hidden"
-                    accept=${this.accept()}
-                />
-                ${icon}
-            </div>
+            <button id="value-upload" class="upload" @click=${this.clickFileInput}>
+                <label>load from file</label>
+            </button>
+            <input
+                type="file"
+                id="field-upload"
+                @change=${this.getUploadedValue.bind(this)}
+                class="hidden"
+                accept=${this.accept()}
+            />
+            ${icon}
         `;
     }
     accept() {

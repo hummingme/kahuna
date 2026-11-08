@@ -9,27 +9,27 @@ import { keyed } from 'lit/directives/keyed.js';
 
 import appWindow from '#components/app-window';
 import BehaviorConfig from '#components/config/behavior-config';
+import checkbox, { type CheckboxProps } from '#components/parts/checkbox';
+import svgIcon from '#components/parts/svgicon';
 import appStore from '#lib/app-store';
 import { emptyTarget, equalTarget } from '#lib/app-target';
-import checkbox, { type CheckboxProps } from '#lib/checkbox';
 import messenger from '#lib/messenger';
-import svgIcon from '#lib/svgicon';
 import { AppTarget } from '#types';
 
-interface MessageStackState {
+type MessageStackState = {
     messages: StackMessage[];
     order: number;
     autoHide: number;
     target: AppTarget;
-}
-interface StackMessage {
+};
+type StackMessage = {
     content: string;
     type: StackMessageType;
     count: number;
     order: number;
     timer?: number | undefined;
     checkbox?: CheckboxProps;
-}
+};
 type StackMessageType = 'success' | 'info' | 'warn' | 'error';
 
 const state = Symbol('messagestack state');

@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import type { Table } from 'dexie';
+import type { IndexableType, Table } from 'dexie';
 import { html, TemplateResult } from 'lit-html';
 import { nothing } from 'lit';
 import { styleMap } from 'lit/directives/style-map.js';
@@ -11,58 +11,60 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 import appWindow from '#components/app-window';
 import ChevronNavigation from '#components/chevron-navigation';
+import configLayer from '#components/configlayer';
 import importer from '#components/importer';
-import jsCodearea from '#components/js-codearea';
+import displayJsConsole from '#components/js-console';
 import messageStack from '#components/messagestack';
 import SelectionTools from '#components/selection-tools';
 import tableTools from '#components/table-tools';
 import tooltip from '#components/tooltip';
 import BehaviorConfig from '#components/config/behavior-config';
 import ColumnsConfig from '#components/config/columns-config';
-import { columnsDefaultOrder } from './config/columns-default';
+import { columnsDefaultOrder } from '#components/config/columns-defaults';
 import displayConfigControl from '#components/config/config-control';
 import FiltersConfig from '#components/config/filters-config';
 import FilterFieldsConfig from '#components/config/filter-fields-config';
 import displayValueEditor from '#components/value-editor/editor';
+import { button, symbolButton } from '#components/parts/button';
+import JsConsoleIcon from '#components/parts/js-console-icon';
+import searchFilterView from '#components/parts/search-filter-view';
+import SettingsIcon from '#components/parts/settings-icon';
+import svgIcon from '#components/parts/svgicon';
 
 import appStore from '#lib/app-store';
 import { globalTarget } from '#lib/app-target';
 import appWorker from '#lib/app-worker';
-import { button, symbolButton } from '#lib/button';
-import { buildColumn, type Column } from '#lib/column';
+import { buildColumn } from '#lib/column';
 import { getConnection } from '#lib/connection';
 import * as t from '#lib/datatypes';
 import { decodeQueryResult } from '#lib/data-wrapper';
 import { isPrimKeyNamed, isPrimKeyUnnamed, isPrimKeyCompound } from '#lib/dexie-utils';
 import display from '#lib/displaytype';
 import env from '#lib/environment';
-import { escapeUnicode } from '#lib/escape-unicode';
-import {
-    isFiltered,
-    isFilterValid,
-    isIndexedFilter,
-    methodProperties,
-} from '#lib/filter';
+import { print } from '#lib/escape-string';
+import { filterColumn, isFiltered, isFilterValid } from '#lib/filter';
 import { hideMessageType, getHiddenMessagesOrigin } from '#lib/hidden-messages';
+import { isIdentifierName } from '#lib/identifier-name';
 import messenger from '#lib/messenger';
 import { queryData } from '#lib/querydata';
 import { checkScrubbler } from '#lib/scrubbler';
-import { selectbox } from '#lib/selectbox';
 import { rowSelector, rowSelectorFields, rowSelectorPrimKey } from '#lib/row-selection';
-import svgIcon from '#lib/svgicon';
-import textinput from '#lib/textinput';
 import { addNestedValues } from '#lib/utils';
 import { type AllowedType, ValueFormatter } from '#lib/value-formatter';
 import type {
     AppTarget,
+    Column,
     Direction,
     Filter,
+    JsCodeareaState,
     KTable,
     Message,
     QueryResultMessagePayload,
     Position,
     QueryDataArgs,
     UnknownRecord,
+    JsCodeareaUser,
+    SymbolButtonProps,
 } from '#types';
 
 type DatatableSettings = {
@@ -72,7 +74,8 @@ type DatatableSettings = {
     markUnindexed: boolean;
     limit: number;
     confirmDeleteRow: boolean;
-    displayCodearea: boolean;
+    escapeNonAscii: boolean;
+    useLocalTimezone: boolean;
     queryPreferWorker: boolean;
     previewSize: number;
 };
@@ -88,7 +91,7 @@ export type DatatableState = DatatableSettings & {
     selected: Set<string | number>;
     offset: number;
     total: number;
-    rowSelector?: unknown | unknown[];
+    rowSelector?: IndexableType;
     colResizing?: ColumnResizeData | undefined;
     firstrun: boolean;
     aborted: boolean;
@@ -97,7 +100,7 @@ export type DatatableState = DatatableSettings & {
 
 type ColumnResizeData = { startX: number; startWidth: number; index: number };
 
-const Datatable = class {
+class Datatable {
     #state: DatatableState = this.emptyState;
     constructor() {
         messenger.register('queryResult', onQueryResult.bind(this));
@@ -128,7 +131,8 @@ const Datatable = class {
             markUnindexed: true,
             limit: 20,
             confirmDeleteRow: true,
-            displayCodearea: true,
+            escapeNonAscii: false,
+            useLocalTimezone: true,
             queryPreferWorker: true,
             previewSize: 30,
             scrollPos: { top: 0, left: 0 },
@@ -140,29 +144,43 @@ const Datatable = class {
         }
     }
     get columns() {
-        return [...this.#state.columns];
+        return structuredClone(this.#state.columns);
     }
     get filters() {
-        return [...this.#state.filters];
+        return structuredClone(this.#state.filters);
     }
-    get breadcrumbIcons() {
-        const selectedTable = this.#state.selectedTable;
-        return typeof selectedTable === 'number'
-            ? [
-                  {
-                      icon: 'tabler-settings',
-                      title: 'table tools',
-                      id: tableToolsButtonId,
-                      '@click': tableToolsClicked.bind(null, selectedTable),
-                  },
-                  {
-                      icon: 'tabler-adjustments',
-                      title: 'table settings and configuration',
-                      '@click': settingsConfigClicked,
-                      id: 'settings-config',
-                  },
-              ]
-            : [];
+    get toolbarIcons() {
+        const { selectedTable, selectorFields, rowSelector, target } = this.#state;
+        if (typeof selectedTable !== 'number') {
+            return [];
+        }
+        const icons: SymbolButtonProps[] = [
+            {
+                title: 'table tools',
+                id: tableToolsButtonId,
+                '@click': tableToolsButtonClicked.bind(null, selectedTable),
+                aria: {
+                    haspopup: true,
+                    expanded: false,
+                    label: 'table tools',
+                },
+                icon: 'tabler-settings',
+            },
+            new SettingsIcon().props(target),
+        ];
+        if (env.codeExecution) {
+            icons.push(
+                new JsConsoleIcon().props({
+                    user: 'datatable',
+                    target,
+                    selectorFields: selectorFields,
+                    rowSelector: rowSelector,
+                    executed: () => codeareaExecuted('datatable'),
+                    requireVariables: () => codeareaRequireVariables(this.state),
+                }),
+            );
+        }
+        return icons;
     }
 
     /**
@@ -184,14 +202,6 @@ const Datatable = class {
             selectorFields,
             total: table.count, // filters applied
         };
-        await jsCodearea.init({
-            user: 'datatable',
-            enabled: settings.displayCodearea && env.codeExecution,
-            target,
-            selectorFields,
-            executed: codeareaExecuted,
-            requireVariables: () => codeareaRequireVariables(datatable.state),
-        });
         await checkScrubbler(target);
         await this.updateDatatable(initialState);
         appStore.update({ selectedTable });
@@ -222,7 +232,8 @@ const Datatable = class {
             values: {
                 datatableRows,
                 confirmDeleteRow,
-                displayCodearea,
+                escapeNonAscii,
+                useLocalTimezone,
                 queryPreferWorker,
             },
         } = await BehaviorConfig.getSettings(target);
@@ -233,7 +244,8 @@ const Datatable = class {
             markUnindexed,
             limit: datatableRows,
             confirmDeleteRow,
-            displayCodearea,
+            escapeNonAscii,
+            useLocalTimezone,
             queryPreferWorker,
             previewSize,
         };
@@ -259,20 +271,22 @@ const Datatable = class {
         return html`
             <div>
                 <h1 class="precis">${headlineView(table)}</h1>
-                ${content} ${content ? jsCodearea.node() : ''}
+                ${content}
             </div>
         `;
     }
     async updateDatatable(stateDiff: Partial<DatatableState>) {
-        this.update(Object.assign(stateDiff, { data: [], total: 0 }));
+        this.update({ ...stateDiff, data: [], total: 0, aborted: false });
         const {
             target,
             dexieTable,
             filters,
+            columns,
             order,
             direction,
             offset,
             limit,
+            useLocalTimezone,
             queryPreferWorker,
             firstrun,
         } = this.#state;
@@ -288,10 +302,12 @@ const Datatable = class {
             tablename: target.table,
             addUnnamedPk,
             filters,
+            columns,
             order,
             direction,
             offset,
             limit: firstrun && limit < 50 ? 50 : limit,
+            useLocalTimezone,
             encodeQueryResult: env.bigIntArrayFlaw === true,
         };
         if (env.workersBlocked === true || queryPreferWorker === false) {
@@ -329,16 +345,26 @@ const Datatable = class {
             return true;
         }
         if (firstrun) {
-            const dataProps = getDataProperties(data);
-            columns = columnsFromIndices(table, dataProps);
-            data = addKeypathsData(data, columns);
-            columns = columnsFromData(data, columns, displayDiscoveredColumns, firstrun);
-            columns = await ColumnsConfig.restoreColumns(
-                target,
-                columns,
-                importer.importedCsvHeads.get(target.table) || [],
-                isPrimKeyNamed(table.primKey),
-            );
+            if (data.length > 0) {
+                columns = columnsFromIndices(table, data);
+                data = addKeypathsData(data, columns);
+                columns = columnsFromData(
+                    data,
+                    columns,
+                    displayDiscoveredColumns,
+                    firstrun,
+                );
+                columns = await ColumnsConfig.restoreColumns(
+                    target,
+                    columns,
+                    importer.importedCsvHeads.get(target.table) || [],
+                    isPrimKeyNamed(table.primKey),
+                );
+            }
+            if (columns.length === 0) {
+                columns = columnsFromIndices(table, []);
+            }
+
             filters = await FilterFieldsConfig.restoreFilters(
                 target,
                 columns,
@@ -382,7 +408,7 @@ const Datatable = class {
         appStore.rerender({ loading: false });
         return res;
     };
-};
+}
 
 const addKeypathsData = (data: UnknownRecord[], columns: Column[]) => {
     const paths = columns.filter((c) => c.innerValue === true).map((c) => c.name);
@@ -394,14 +420,6 @@ const addNestedData = (data: UnknownRecord[], paths: string[]) => {
         addNestedValues(row, paths);
     });
     return data;
-};
-
-const getDataProperties = (data: UnknownRecord[]) => {
-    const props = [];
-    for (const row of data) {
-        props.push(...Object.getOwnPropertyNames(row));
-    }
-    return new Set(props);
 };
 
 const columnsFromData = (
@@ -435,7 +453,7 @@ const columnsFromData = (
     return columns;
 };
 
-const columnsFromIndices = (table: KTable, dataProps: Set<string>) => {
+const columnsFromIndices = (table: KTable, data: UnknownRecord[]) => {
     const columns: Column[] = [];
 
     if (isPrimKeyNamed(table.primKey) && !isPrimKeyCompound(table.primKey)) {
@@ -466,10 +484,19 @@ const columnsFromIndices = (table: KTable, dataProps: Set<string>) => {
         columns.push(...columnsFromKeypath(table.primKey.keyPath, columns));
     }
 
+    const dataProps = getDataProperties(data);
     for (const column of columns) {
         column.innerValue = !dataProps.has(column.name) && column.name.includes('.');
     }
     return columns;
+};
+
+const getDataProperties = (data: UnknownRecord[]) => {
+    const props = [];
+    for (const row of data) {
+        props.push(...Object.getOwnPropertyNames(row));
+    }
+    return new Set(props);
 };
 
 const columnsFromKeypath = (keypath: string[], columns: Column[]) => {
@@ -480,8 +507,7 @@ const columnsFromKeypath = (keypath: string[], columns: Column[]) => {
             columns.push(
                 buildColumn({
                     name: kp,
-                    indexed: false,
-                    compoundHead: first,
+                    indexed: first,
                     visible: true,
                 }),
             );
@@ -603,8 +629,7 @@ const doReset = () => {
  * navigate action for chevronNavigation
  */
 const navigate = (offset: number) => {
-    const { total, limit, offset: previousOffset } = datatable.state;
-    if (offset === previousOffset) return;
+    const { total, limit } = datatable.state;
     if (offset < 1 || isNaN(offset)) {
         offset = 1;
     } else if (offset > total) {
@@ -783,12 +808,9 @@ const deleteRow = async (idx: number) => {
 const editRow = (idx: number) => {
     const { selectorFields, data } = datatable.state;
     const dataRow = data[idx];
-    const rowSelector = rowSelectorPrimKey(selectorFields, dataRow);
+    datatable.update({ rowSelector: rowSelectorPrimKey(selectorFields, dataRow) });
     const code = editRowCode(dataRow, selectorFields);
-
-    datatable.update({ rowSelector });
-    jsCodearea.update({
-        enabled: true,
+    summonJsConsole.bind(datatable)('editRow', {
         code,
         savedIndex: -1,
         saved: false,
@@ -860,7 +882,7 @@ const editKey = (selectorFields: string[], dataRow: UnknownRecord) => {
         : `[${selectorFields.map((name) => editValue(name, dataRow[name])).join(', ')}]`;
 };
 const editValueFromRow = (name: string) => {
-    return t.isUnquotedPropertyName(name) ? `row.${name}` : `row["${name}"]`;
+    return isIdentifierName(name) ? `row.${name}` : `row["${name}"]`;
 };
 
 /**
@@ -937,6 +959,7 @@ const editCellValue = (
         innerValue: column.innerValue,
         value,
         absent,
+        columnFormat: column.format,
         anchorPosition,
     });
 };
@@ -968,7 +991,7 @@ const editableColumns = (columns: Column[]) =>
 const headlineView = (table: KTable) => {
     return html`
         Table
-        <i>${escapeUnicode(table.name)}</i>
+        <i>${print(table.name)}</i>
         has ${table.count} record${table.count === 1 ? '' : 's'} in total
     `;
 };
@@ -1189,6 +1212,8 @@ const rowView = (rdata: UnknownRecord, columns: Column[], tstate: DatatableState
             value = display(rdata[col.name], type, {
                 format: col.format,
                 previewSize: tstate.previewSize,
+                escapeNonAscii: tstate.escapeNonAscii,
+                useLocalTimezone: tstate.useLocalTimezone,
             });
         } else {
             absent = '1';
@@ -1287,10 +1312,14 @@ const navigationView = ({
 
 const searchfieldsView = ({
     filters,
+    columns,
     markUnindexed,
+    useLocalTimezone,
 }: {
     filters: Filter[];
+    columns: Column[];
     markUnindexed: boolean;
+    useLocalTimezone: boolean;
 }) => {
     const buttonId = 'filter-config-button-id';
     const configButton = symbolButton({
@@ -1315,9 +1344,20 @@ const searchfieldsView = ({
         '@click': doReset,
     });
     const searchfields: TemplateResult[] = [];
-    filters.forEach((filter, idx) =>
-        searchfields.push(searchfieldView(filter, idx, markUnindexed)),
-    );
+    filters.forEach((filter, idx) => {
+        const column = filterColumn(filter.field, columns);
+        searchfields.push(
+            searchFilterView({
+                filter,
+                idx,
+                markUnindexed,
+                format: column.format,
+                useLocalTimezone,
+                onChange: onFilterChanged,
+                onKeydown: onFilterKeydown,
+            }),
+        );
+    });
     return html`
         ${configButton}
         <div id="dtsearch">
@@ -1327,49 +1367,30 @@ const searchfieldsView = ({
     `;
 };
 
-const searchfieldView = (filter: Filter, idx: number, markUnindexed: boolean) => {
-    const placeholder = `${filter.field} ${methodProperties(filter).short}`;
-    const className = markUnindexed && !isIndexedFilter(filter) ? 'warn' : null;
-    const attributes = {
-        title: `search ${placeholder}`,
-        placeholder,
-        'data-searchindex': idx,
-        '@change': onFilterChanged,
-        '@keydown': onFilterKeydown,
-        class: className,
-    };
-    return filter.method === 'empty'
-        ? selectbox(
-              Object.assign(attributes, {
-                  options: searchEmptyOptions(filter.field),
-                  selected: filter.search,
-              }),
-          )
-        : textinput(
-              Object.assign(attributes, {
-                  typ: 'search',
-                  '.value': filter.search,
-              }),
-          );
-};
-
-const searchEmptyOptions = (fname: string) => ({
-    '': '',
-    yes: `${fname} is empty`,
-    no: `${fname} not empty`,
-});
-
 const tableToolsButtonId = 'table-tools-button-id';
-const tableToolsClicked = (tableIdx: number) => {
+const tableToolsButtonClicked = (tableIdx: number) => {
     tableTools.summon(tableIdx, tableToolsButtonId);
 };
 
-const settingsConfigClicked = () => {
-    displayConfigControl({
-        target: appStore.target(),
-        anchorId: 'settings-config',
-    });
-};
+function summonJsConsole(
+    this: Datatable,
+    user: 'editRow' | 'datatable',
+    codeareaUpdate?: Partial<JsCodeareaState>,
+) {
+    const state = this.state;
+    const jsConsoleArgs = {
+        anchorId: JsConsoleIcon.jsConsoleButtonId,
+        user,
+        target: state.target,
+        selectorFields: state.selectorFields,
+        rowSelector: state.rowSelector,
+        requireVariables: () => codeareaRequireVariables(state),
+        executed: () => codeareaExecuted(user),
+        codeareaUpdate,
+    };
+
+    displayJsConsole(jsConsoleArgs);
+}
 
 const onQueryResult = async (message: Message) => {
     if (message.type === 'queryResult') {
@@ -1426,9 +1447,9 @@ const onQueryError = (message: Message) => {
 };
 
 const codeareaRequireVariables = (state: DatatableState) => {
-    const { rowSelector, selectorFields, data } = state;
+    const { rowSelector, selectorFields, selected, data } = state;
     return {
-        selected: structuredClone(state.selected),
+        selected: structuredClone(selected),
         row: structuredClone(getEditRow({ rowSelector, selectorFields, data })),
     };
 };
@@ -1458,9 +1479,9 @@ const getEditRow = ({
     }
 };
 
-const codeareaExecuted = async () => {
-    if (datatable.state.displayCodearea === false) {
-        jsCodearea.disable();
+const codeareaExecuted = async (user: JsCodeareaUser) => {
+    if (user === 'editRow') {
+        configLayer.close();
     }
     datatable.reloadDatatable({});
 };

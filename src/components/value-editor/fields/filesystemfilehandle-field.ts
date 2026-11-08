@@ -4,37 +4,37 @@
  */
 
 import { html } from 'lit-html';
+import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 
 import Field from '#components/value-editor/fields/field';
 import textInput from '#components/value-editor/text-input';
+import { focusForceVisible } from '#components/value-editor/view-utils';
 
 export default class FilesystemfilehandleField extends Field {
-    view() {
+    selectFileButton: Ref<HTMLElement> = createRef();
+    formView() {
         const fileName =
             this.value instanceof FileSystemFileHandle
                 ? this.value.name
                 : '< no file selected >';
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    <p>
-                        <button
-                            @click=${this.pickFile.bind(this)}
-                            ?disabled=${this.inputMethod !== 'form'}
-                        >
-                            select file
-                        </button>
-                    </p>
-                    ${textInput(this, {
-                        id: 'filename',
-                        '.value': fileName,
-                        size: 20,
-                        label: 'file name',
-                        disabled: true,
-                    })}
-                </div>
-                ${this.inputMethodView()}
-            </div>
+            <p>
+                <button
+                    @click=${this.pickFile.bind(this)}
+                    ?disabled=${this.inputMethod !== 'form'}
+                    ${ref(this.selectFileButton)}
+                >
+                    select file
+                </button>
+            </p>
+            ${textInput(this, {
+                id: this.valueInputId('file-name'),
+                '.value': fileName,
+                style: 'width: 15ch;',
+                classes: ['resizable'],
+                label: 'file name',
+                disabled: true,
+            })}
         `;
     }
     async pickFile(event: Event) {
@@ -59,7 +59,7 @@ export default class FilesystemfilehandleField extends Field {
         this.state.value = result;
     }
     toFormValue() {
-        const nodeFileName = this.node.value;
+        const nodeFileName = this.nodeInput;
         if (nodeFileName instanceof HTMLInputElement) {
             nodeFileName.value = this.value.name;
         }
@@ -67,5 +67,10 @@ export default class FilesystemfilehandleField extends Field {
     fromFormValue(): undefined {}
     override toSourceValue(): string {
         return 'return value;';
+    }
+    override focus() {
+        const button = this.selectFileButton.value;
+        if (!(button instanceof HTMLButtonElement) || this.inputMethod !== 'form') return;
+        focusForceVisible(button);
     }
 }

@@ -3,16 +3,17 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { valueControlsTextareaView } from '#components/value-editor/view-utils';
+import { isFlexInputNode } from '#components/value-editor/flex-input';
 import Field from '#components/value-editor/fields/field';
 import { getType } from '#lib/datatypes';
 import { isLarge } from '#lib/datatype-attributes';
-import { unescapeUnicode } from '#lib/escape-unicode';
+import { unescapeString } from '#lib/escape-string';
 import { decodeFromFile } from '#lib/decode-string';
 
 export default class StringField extends Field {
-    view() {
-        return valueControlsTextareaView(this);
+    formView() {
+        const value = this.toFormValue() || '';
+        return this.flexInput ? this.flexInput.view(value) : '';
     }
     get value(): string {
         return this.state.value as string;
@@ -40,15 +41,16 @@ export default class StringField extends Field {
         return this.stringFormatter.render(this.value, 'string', this.formOptions());
     }
     fromFormValue(): string | undefined {
-        if (this.node.value instanceof HTMLTextAreaElement) {
-            return unescapeUnicode(this.node.value.value);
+        if (isFlexInputNode(this.nodeInput)) {
+            return unescapeString(this.nodeInput.value);
         }
     }
     override async handleUploadedValue(file: File) {
-        if (!this.textarea || !this.codearea) return;
+        if (!this.flexInput || !this.codearea) return;
         const value = await decodeFromFile(file, this.state.uploadCharset);
-        this.state.formOptions.expanded = this.state.codeOptions.expanded =
-            this.value.length < isLarge('string');
+        const compacted = this.value.length >= isLarge('string');
+        this.formatterMgr.setOptions('form', { compacted });
+        this.formatterMgr.setOptions('code', { compacted });
         this.update(value);
     }
     hints = {

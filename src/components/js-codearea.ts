@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html, render } from 'lit-html';
+import { html, nothing, render } from 'lit-html';
 import { styleMap } from 'lit/directives/style-map.js';
 import { ref, createRef } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -12,48 +12,28 @@ import { spread } from '@open-wc/lit-helpers';
 import ChevronNavigation from '#components/chevron-navigation';
 import messageStack from '#components/messagestack';
 import BehaviorConfig from '#components/config/behavior-config';
-import JsCodeareaConfig, {
-    type JsCodeareaConfigValues,
-} from '#components/config/jscodearea-config';
+import JsCodeareaConfig from '#components/config/jscodearea-config';
+import { button, symbolButton } from '#components/parts/button';
 import appStore from '#lib/app-store';
 import appWorker from '#lib/app-worker';
-import { button, symbolButton } from '#lib/button';
 import { decodeValue } from '#lib/data-wrapper';
 import env from '#lib/environment';
 import { executeCode } from '#lib/execute-code';
 import messenger from '#lib/messenger';
 import settings from '#lib/settings';
-import svgIcon from '#lib/svgicon';
-import type { AppTarget, ExecutionMethod, Message, UnknownRecord } from '#types';
-
-interface JsCodeareaState extends JsCodeareaConfigValues {
-    user: 'datatable' | 'valueEditorField';
-    enabled: boolean;
-    code: string;
-    placeholder: boolean;
-    executionMethod: ExecutionMethod;
-    saved: boolean;
-}
-interface JsCodeareaOptions {
-    user: 'datatable' | 'valueEditorField';
-    enabled: boolean;
-    target: AppTarget;
-    detail?: string;
-    selectorFields: string[];
-    executed: (res: unknown) => void;
-    requireVariables: () => RequiredVariables;
-}
-export interface RequiredVariables {
-    selected: Set<string | number>;
-    row: UnknownRecord | undefined;
-    value?: unknown;
-}
+import type {
+    ExecutionMethod,
+    JsCodeareaOptions,
+    JsCodeareaState,
+    JsCodeareaUser,
+    Message,
+} from '#types';
 
 const state = Symbol('JsCodearea state');
 
 export const JsCodearea = class {
     [state]: JsCodeareaState = this.initialState;
-    #options?: Omit<JsCodeareaOptions, 'enabled' | 'user'>;
+    #options?: Omit<JsCodeareaOptions, 'user'>;
     #node?: HTMLElement;
     #textarea?: HTMLTextAreaElement;
     #saveIcon = createRef();
@@ -78,8 +58,8 @@ export const JsCodearea = class {
         messenger[action]('refreshCodearea', this.#boundRefresh);
     }
     async init(options: JsCodeareaOptions) {
-        let enabled, user;
-        ({ enabled, user, ...this.#options } = options);
+        let user;
+        ({ user, ...this.#options } = options);
         const { values } = await JsCodeareaConfig.getSettings(
             options.target,
             options.detail,
@@ -89,20 +69,17 @@ export const JsCodearea = class {
             ...values,
             ...(await this.behaviorSettings()),
             user,
-            enabled,
             code,
             saved: code.length > 0,
         };
     }
     get initialState(): JsCodeareaState {
         const executionMethod: ExecutionMethod = 'webworker';
-        const user: 'datatable' | 'valueEditorField' = 'datatable';
+        const user: JsCodeareaUser = 'datatable';
         return Object.assign(
             {
                 user,
-                enabled: true,
                 code: '',
-                placeholder: true,
                 executionMethod,
                 saved: false,
             },
@@ -127,33 +104,30 @@ export const JsCodearea = class {
     updateOptions(update: Partial<JsCodeareaOptions>) {
         this.#options = { ...this.options, ...update };
     }
-    disable() {
-        this[state].enabled = false;
-    }
     update(diff: Partial<JsCodeareaState>) {
         this[state] = { ...this[state], ...diff };
+        const { detail, target } = this.options;
         settings.saveSettings(
             this[state],
-            JsCodeareaConfig.getDefaults(this.#options?.detail),
-            this.options.target,
+            JsCodeareaConfig.getDefaults(detail),
+            target,
             JsCodeareaConfig.subject,
-            this.#options?.detail,
+            detail,
         );
         this.refreshIcons();
     }
     async refresh() {
+        if (!this.#options) return;
         this.update({
             ...(await this.behaviorSettings()),
         });
     }
     async behaviorSettings() {
-        const { codeareaPlaceholder, codeExecutionMethod, displayCodearea } = (
+        const { codeExecutionMethod } = (
             await BehaviorConfig.getSettings(this.options.target)
         ).values;
         return {
-            enabled: displayCodearea,
             executionMethod: codeExecutionMethod,
-            placeholder: codeareaPlaceholder,
         };
     }
     node() {
@@ -173,33 +147,29 @@ export const JsCodearea = class {
         }
     }
     view = () => {
-        const { enabled, width, height, code } = this[state];
-        if (enabled === false) {
-            return '';
-        }
+        const { width, height, code } = this[state];
+        const closeButton = this.#options?.closeButton ?? nothing;
         const executeButton = button({
-            content: svgIcon('tabler-check'),
+            content: 'execute',
             '@click': this.execute,
             title: 'execute javascript code',
         });
         const clearButton = button({
-            content: svgIcon('tabler-x'),
+            content: 'clear',
             '@click': this.clear,
             title: 'clear textarea',
         });
+        const placeholder = this.placeholder();
         const attributes = {
             id: 'js-codearea',
             spellcheck: false,
             '.value': code,
             '@pointerup': this.pointerUp.bind(this),
-            placeholder: this.placeholder(),
+            '@focus': this.clearPlaceholder,
+            '@blur': this.setPlaceholder.bind(this),
+            '@input': this.input.bind(this),
+            ...(placeholder ? { placeholder } : null),
         };
-        if (this[state].placeholder) {
-            Object.assign(attributes, {
-                '@focus': this.clearPlaceholder,
-                '@blur': this.setPlaceholder.bind(this),
-            });
-        }
         const styles = width && height ? styleMap({ width, height }) : null;
         return html`
             <textarea
@@ -209,35 +179,55 @@ export const JsCodearea = class {
             ></textarea>
             <div id="codearea-nav">
                 ${this.savedCodeControl()}
-                <div class="button-wrapper">${executeButton} ${clearButton}</div>
+                <div class="button-wrapper">
+                    ${closeButton} ${clearButton} ${executeButton}
+                </div>
             </div>
         `;
     };
     clearPlaceholder(event: Event) {
         const target = event.target as HTMLTextAreaElement;
-        target.placeholder = '';
+        target.removeAttribute('placeholder');
     }
     setPlaceholder(event: Event) {
         const target = event.target as HTMLTextAreaElement;
-        target.placeholder = this.placeholder();
+        const placeholder = this.placeholder();
+        if (placeholder) {
+            target.setAttribute('placeholder', placeholder);
+        }
     }
     placeholder() {
-        if (this[state].code || this[state].placeholder === false) {
+        const { code, user } = this[state];
+        if (code) {
             return '';
         }
         const { database, table } = appStore.target();
-        return this[state].user === 'datatable'
-            ? `/* available global variables:
- *   db (Dexie database connection for ${database})
- *   table (Dexie table instance of ${table})
- *   selection (Dexie collection instance of selected rows, if any)
- *   Dexie (Dexie instance)
- */`
-            : `/* available global variables:
- * value, row, selection, table, db, Dexie;
- * return the new field value
- */`;
+
+        const lines = ['/* available predefined objects', ' *   Dexie : Dexie instance'];
+
+        if (user !== 'origin') {
+            lines.push(` *   db : Dexie database connection for ${database}`);
+        }
+        if (user !== 'origin' && user !== 'database') {
+            lines.push(
+                ` *   table : Dexie table instance of ${table}`,
+                ' *   selection : Dexie collection instance of selected rows',
+            );
+        }
+        if (user === 'editRow' || user === 'editValue') {
+            lines.push(' *   row : data row that is being edited');
+            if (user === 'editValue') {
+                lines.push(
+                    ' *   value : data value that is being edited',
+                    ' *',
+                    ' *   -> return the new field value',
+                );
+            }
+        }
+        lines.push(' */');
+        return lines.join('\n');
     }
+
     savedCodeControl = () => {
         const { savedIndex, savedCode } = this[state];
         const chevronNavigation =
@@ -275,14 +265,9 @@ export const JsCodearea = class {
         `;
     };
     textareaRendered = (node?: Element) => {
-        if (node !== undefined) {
-            this.#textarea = node as HTMLTextAreaElement;
-            node.addEventListener('focus', () => {
-                node.addEventListener('keyup', this.keyUp.bind(this));
-            });
-            node.addEventListener('blur', () => {
-                node.removeEventListener('keyup', this.keyUp);
-            });
+        if (node instanceof HTMLTextAreaElement) {
+            this.#textarea = node;
+            requestAnimationFrame(() => node.focus());
         }
     };
     forgetRendered = (node?: Element) => {
@@ -291,7 +276,7 @@ export const JsCodearea = class {
             this.refreshIcons();
         }
     };
-    keyUp = () => {
+    input = () => {
         this[state].code = this.textarea.value;
         this.refreshIcons();
     };
@@ -416,7 +401,7 @@ export const JsCodearea = class {
             selected,
             row,
             value,
-            client: this[state].user,
+            user: this[state].user,
             encodeResult: env.bigIntArrayFlaw === true,
         };
         const executionMethod = env.executionMethod(this[state].executionMethod);
@@ -444,14 +429,14 @@ export const JsCodearea = class {
     codeExecuted(message: Message) {
         if (
             (message.type === 'codeExecuted' || message.type === 'idxdbmCodeExecuted') &&
-            message.client === this[state].user
+            message.user === this[state].user
         ) {
             this.executed(decodeValue(message.result));
         }
     }
     async executed(result: unknown) {
+        await this.stopLoading();
         this.options.executed(result);
-        this.stopLoading();
     }
     codeErrorMessage(msg: Message) {
         if (msg.type === 'codeError') {
@@ -476,9 +461,9 @@ export const JsCodearea = class {
             loadingStop: this.abort.bind(this),
         });
     }
-    stopLoading() {
+    async stopLoading() {
         const loadTables = this[state].user === 'datatable';
-        appStore.update(
+        await appStore.update(
             {
                 loading: false,
                 loadingMsg: '',

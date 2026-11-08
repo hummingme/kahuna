@@ -3,19 +3,22 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html, render, type TemplateResult } from 'lit-html';
+import { html, nothing, render, type TemplateResult } from 'lit-html';
 import { ref } from 'lit/directives/ref.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 import appWindow from '#components/app-window';
 import Layer from '#components/layer';
+import { button } from '#components/parts/button';
 import appStore from '#lib/app-store';
-import { button } from '#lib/button';
+import { toggleAriaExpanded } from '#lib/aria';
 import Draggable from '#lib/draggable';
+import { print } from '#lib/escape-string';
 import { type Position, EMPTY_POSITION } from '#types';
 
-interface ConfigLayerState {
-    node?: HTMLElement;
+type ConfigLayerState = {
+    node?: HTMLDivElement;
+    anchorId?: string;
     visible: boolean;
     view: (() => TemplateResult) | null;
     anchorPosition: Position;
@@ -23,25 +26,29 @@ interface ConfigLayerState {
     keepMinimumTop: boolean;
     minimumTop: number;
     buttons: LayerButton[];
+    hideButtons?: boolean;
     confirmed: { [key: string]: () => void };
     topic: string | null;
-}
-interface ShowProps extends Partial<ConfigLayerState> {
+    onReady: ((node: HTMLDivElement) => void) | null;
+};
+type ShowProps = Partial<ConfigLayerState> & {
     anchorId?: string;
     buttons?: LayerButton[];
-}
+};
 
-interface PanelButton {
+type PanelButton = {
     label: string | TemplateResult;
     handler: (...args: any[]) => void;
-}
-interface LayerButton extends PanelButton {
+    id?: string;
+    disabled?: boolean;
+};
+type LayerButton = PanelButton & {
     isClose?: boolean;
-}
-interface CloseOptions {
+};
+type CloseOptions = {
     force?: boolean;
     rerenderApp?: boolean;
-}
+};
 
 const state = Symbol('configlayer state');
 const stack = Symbol('configlayer stack');
@@ -50,6 +57,7 @@ class ConfigLayer {
     [state]: ConfigLayerState;
     [stack]: ConfigLayerState[];
     #layer;
+    #anchor: HTMLElement | null = null;
     constructor() {
         this[state] = this.#initState;
         this[stack] = [];
@@ -70,6 +78,7 @@ class ConfigLayer {
             buttons: [{ label: 'close', handler: this.close.bind(this) }],
             confirmed: {},
             topic: null,
+            onReady: null,
         };
     }
     get topic() {
@@ -141,6 +150,14 @@ class ConfigLayer {
         if (previousState && options.force === false) {
             this.update(previousState);
         } else {
+            if (this.#anchor?.hasAttribute('aria-expanded')) {
+                this.#anchor.setAttribute('aria-expanded', 'false');
+                this.#anchor.removeAttribute('aria-controls');
+            }
+            const anchor = this.#anchor;
+            if (anchor) {
+                requestAnimationFrame(() => anchor.focus());
+            }
             this.update(this.#initState);
             this.#layer.removeEscLayerHandler();
             this.#layer.removeClickWindowHandler(appWindow.win);
@@ -154,9 +171,17 @@ class ConfigLayer {
         this.#layer.resetDraggable();
     }
     onTopicClicked = (event: MouseEvent) => {
-        const target = event.target as HTMLElement;
-        const topic = target && target.closest('a')?.dataset.topic;
-        if (topic) this.toggleTopic(topic);
+        const target = event.currentTarget;
+        if (target instanceof HTMLElement && target.dataset.topic) {
+            this[state].node
+                ?.querySelectorAll('button.tool[aria-expanded]')
+                .forEach((b) =>
+                    b === target
+                        ? toggleAriaExpanded(b as HTMLButtonElement)
+                        : b.setAttribute('aria-expanded', 'false'),
+                );
+            this.toggleTopic(target.dataset.topic);
+        }
     };
     toggleTopic(topic: string) {
         this.update({ topic: topic === configLayer[state].topic ? null : topic });
@@ -180,9 +205,14 @@ class ConfigLayer {
             : '';
     }
     nodeReady(node?: Element) {
-        if (node instanceof HTMLElement) {
+        if (node instanceof HTMLDivElement) {
             this[state].node = node;
             this.render();
+            this.#anchor = appWindow.win.querySelector(`#${this[state].anchorId}`);
+            if (this.#anchor?.hasAttribute('aria-expanded')) {
+                this.#anchor.setAttribute('aria-expanded', 'true');
+                this.#anchor.setAttribute('aria-controls', 'config-layer');
+            }
         }
     }
     makeDraggable() {
@@ -191,39 +221,57 @@ class ConfigLayer {
         }
     }
     render() {
-        if (this[state].node) {
-            render(this.view(), this[state].node);
-            requestAnimationFrame(() => this.fixPosition());
+        const { node, onReady } = this[state];
+        if (node) {
+            render(this.view(), node);
+            requestAnimationFrame(() => {
+                if (onReady instanceof Function) {
+                    onReady(node);
+                }
+                this.fixPosition();
+            });
         }
     }
     view() {
         if (this[state].visible === false) {
             return '';
         }
-        const { buttons, view } = this[state];
-        const buttonResults: TemplateResult[] = [];
-        for (const { label, handler, isClose, ...attributes } of buttons) {
-            const clickHandler = () => {
-                if (isClose) this.close.bind(this)();
-                else if (handler) handler();
-            };
-            buttonResults.push(
-                button({ content: label, '@click': clickHandler, ...attributes }),
-            );
-        }
+        const view = this[state].view;
         return html`
             <div id="config-stage">${view && view()}</div>
-            <div class="button-wrapper">${buttonResults}</div>
+            ${this.buttons()}
         `;
     }
+    buttons() {
+        const { buttons, hideButtons } = this[state];
+        const buttonResults: TemplateResult[] = [];
+        if (!hideButtons) {
+            for (const { label, handler, isClose, ...attributes } of buttons) {
+                const clickHandler = () => {
+                    if (isClose) this.close.bind(this)();
+                    else if (handler) handler();
+                };
+                buttonResults.push(
+                    button({ content: label, '@click': clickHandler, ...attributes }),
+                );
+            }
+            return html`
+                <div class="button-wrapper">${buttonResults}</div>
+            `;
+        }
+        return nothing;
+    }
     panel(content: TemplateResult, contentButton: PanelButton) {
+        const { label, handler, id, disabled } = contentButton;
         const buttonView =
             contentButton !== undefined
                 ? html`
                       <div class="button-wrapper">
                           ${button({
-                              content: contentButton.label,
-                              '@click': contentButton.handler,
+                              content: label,
+                              '@click': handler,
+                              id,
+                              disabled,
                           })}
                       </div>
                   `
@@ -263,7 +311,7 @@ class ConfigLayer {
         return html`
             <div class="confirm panel">
                 ${label}
-                <i>${item}</i>
+                <i>${print(item)}</i>
                 ?
                 <div class="clearfix">${buttons}</div>
             </div>

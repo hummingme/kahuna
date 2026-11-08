@@ -8,22 +8,24 @@ import { html, TemplateResult } from 'lit-html';
 import configLayer from '#components/configlayer';
 import databaseTools from '#components/database-tools';
 import datatable from '#components/datatable';
-import { escapeUnicode } from '#lib/escape-unicode';
+import { print } from '#lib/escape-string';
 import messageStack from '#components/messagestack';
 import tableTools from '#components/table-tools';
-import displayConfigControl from '#components/config/config-control';
+import { symbolButton } from '#components/parts/button';
+import JsConsoleIcon from '#components/parts/js-console-icon';
+import SettingsIcon from '#components/parts/settings-icon';
 import appStore from '#lib/app-store';
-import { symbolButton } from '#lib/button';
 import { closeDB, getDB, getConnection } from '#lib/connection';
 import { shallowEqual } from '#lib/datatypes';
 import { tableIndexesSpec } from '#lib/dexie-utils';
+import env from '#lib/environment';
 import { rowIndex } from '#lib/utils';
-import type { KTable, Schema } from '#types';
+import type { KTable, Schema, SymbolButtonProps } from '#types';
 
-interface DBState {
+type DBState = {
     dbname: string;
     selectedDB: number;
-}
+};
 
 let dbstate: DBState;
 
@@ -86,7 +88,7 @@ const template = function (tables: KTable[]): TemplateResult {
         return html`
             <h1 class="precis">
                 Database
-                <i>${escapeUnicode(dbstate.dbname)}</i>
+                <i>${print(dbstate.dbname)}</i>
                 contains ${cnt} ${notation}:
             </h1>
             ${tablesTableTemplate(tables)}
@@ -95,7 +97,7 @@ const template = function (tables: KTable[]): TemplateResult {
         return html`
             <div class="lonely">
                 Please be patient while the tables from
-                <i>${escapeUnicode(dbstate.dbname)}</i>
+                <i>${print(dbstate.dbname)}</i>
                 are loaded!
             </div>
         `;
@@ -103,7 +105,7 @@ const template = function (tables: KTable[]): TemplateResult {
         return html`
             <div class="lonely">
                 There are no tables in the database
-                <i>${escapeUnicode(dbstate.dbname)}</i>
+                <i>${print(dbstate.dbname)}</i>
                 !
             </div>
             <div class="lonely">
@@ -120,7 +122,7 @@ const tablesTableTemplate = function (tables: KTable[]): TemplateResult {
 
     tables.forEach((table, idx) => {
         const idxstr = table.indexes.map((i) => i.src).join(', ');
-        const tableName = escapeUnicode(table.name);
+        const tableName = print(table.name);
         rows.push(html`
             <tr title="click to load the table ${tableName}">
                 <td>${tableName}</td>
@@ -253,32 +255,37 @@ const databaseToolsClicked = (event: Event) => {
     }
 };
 
-const settingsConfigClicked = () => {
-    displayConfigControl({
-        target: appStore.target(),
-        realm: 'behavior',
-        anchorId: 'settings-config',
-    });
-};
-
 const tableToolsButtonId = 'table-tools-button-id';
 const databaseToolsButtonId = 'database-tools-button-id';
 
-const breadcrumbIcons = () => [
-    {
-        icon: 'tabler-settings',
-        '@click': databaseToolsClicked,
-        title: 'database tools',
-        id: databaseToolsButtonId,
-        'data-databaseidx': dbstate.selectedDB,
-    },
-    {
-        icon: 'tabler-adjustments',
-        title: 'database settings and configuration',
-        '@click': settingsConfigClicked,
-        id: 'settings-config',
-    },
-];
+const toolbarIcons = () => {
+    const icons: SymbolButtonProps[] = [
+        {
+            title: 'database tools',
+            id: databaseToolsButtonId,
+            '@click': databaseToolsClicked,
+            'data-databaseidx': dbstate.selectedDB,
+            aria: {
+                haspopup: true,
+                expanded: false,
+                label: 'database tools',
+            },
+            icon: 'tabler-settings',
+        },
+        new SettingsIcon().props(appStore.target()),
+    ];
+    if (env.codeExecution) {
+        icons.push(
+            new JsConsoleIcon().props({
+                user: 'database',
+                target: appStore.target(),
+                executed: () => init(dbstate.selectedDB),
+            }),
+        );
+    }
+
+    return icons;
+};
 
 const Database = {
     summon,
@@ -290,7 +297,7 @@ const Database = {
     databaseTables,
     schema,
     changeSchema,
-    breadcrumbIcons,
+    toolbarIcons,
 };
 
 export default Database;

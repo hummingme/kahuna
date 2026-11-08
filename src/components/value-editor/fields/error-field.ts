@@ -10,33 +10,29 @@ import Field, { type UpdateOptions } from '#components/value-editor/fields/field
 import { stringToNameMessage } from '#components/value-editor/converter';
 import optionsIcon from '#components/value-editor/options-icon';
 import textInput from '#components/value-editor/text-input';
-import { selectbox } from '#lib/selectbox';
+import { selectbox } from '#components/parts/selectbox';
 import { selfMap } from '#lib/utils';
 import type { FormatterOptions } from '#lib/value-formatter';
 
 export default class ErrorField extends Field {
     nodeMessage: Ref<HTMLInputElement> = createRef();
     nodeName: Ref<HTMLInputElement> = createRef();
-    view() {
+    formView() {
         const { message, name } = this.value;
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    <div class="form-wrapper">
-                        <div>
-                            ${textInput(this, {
-                                id: 'error-message',
-                                '.value': this.toFormString(message),
-                                size: 25,
-                                label: 'message',
-                                refVar: this.nodeMessage,
-                            })}
-                            ${this.nameSelectbox(name)}
-                        </div>
-                        <div class="value-icons">${optionsIcon(this, 'form')}</div>
-                    </div>
+            <div class="form-wrapper">
+                <div>
+                    ${textInput(this, {
+                        id: this.valueInputId('message'),
+                        '.value': this.toFormString(message),
+                        classes: ['resizable'],
+                        style: 'width: 20ch;',
+                        label: 'message',
+                        refVar: this.nodeMessage,
+                    })}
+                    ${this.nameSelectbox(name)}
                 </div>
-                ${this.inputMethodView()}
+                <div class="value-icons">${optionsIcon(this, 'form')}</div>
             </div>
         `;
     }
@@ -80,29 +76,27 @@ export default class ErrorField extends Field {
         const msgNode = this.nodeMessage.value;
         if (!msgNode) return;
         msgNode.value = this.toFormString(this.value.message);
-        const disabled = this.inputMethod !== 'form' || !this.state.formOptions.expanded;
+        const disabled =
+            this.inputMethod !== 'form' || this.formatterMgr.getFormOptions().compacted;
         msgNode.disabled = disabled;
         super.updateFormFieldValue(options);
     }
-    override defaultValueOptions(): FormatterOptions {
-        return {
-            ...super.defaultValueOptions(),
-            escapeNonCharacters: true,
-            unescapedLineFeeds: false,
-        };
-    }
+    override defaultOptionsOverrides: Partial<FormatterOptions> = {
+        escapeNonCharacters: true,
+        escapeLf: true,
+    };
     nameSelectbox(selected: string) {
         return html`
             <p>
                 ${selectbox({
-                    id: 'error-name',
+                    id: this.valueInputId('name'),
                     selected,
                     options: selfMap(this.errorNames),
                     '?disabled': this.inputMethod !== 'form',
                     '@change': this.handleFormChange.bind(this),
                     refVar: this.nodeName,
                 })}
-                <label for="error-name}">name</label>
+                <label for="error-name">name</label>
             </p>
         `;
     }
@@ -116,4 +110,7 @@ export default class ErrorField extends Field {
         'TypeError',
         'URIError',
     ];
+    override focus(): void {
+        super.focus(this.nodeMessage.value);
+    }
 }

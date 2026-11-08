@@ -5,28 +5,24 @@
 
 import { nothing } from 'lit';
 import { html, render, type TemplateResult } from 'lit-html';
-import { ref } from 'lit/directives/ref.js';
+import { createRef, ref, Ref } from 'lit/directives/ref.js';
 
 import Field from '#components/value-editor/fields/field';
 import saveFileIcon from '#components/value-editor/save-file-icon';
-import { symbolButton } from '#lib/button';
+import { focusForceVisible } from '#components/value-editor/view-utils';
+import { symbolButton } from '#components/parts/button';
 import { getType } from '#lib/datatypes';
+import { print } from '#lib/escape-string';
 
 export default class FilelistField extends Field {
-    view() {
+    wrapperNode: Ref<HTMLDivElement> = createRef();
+    formView() {
         return html`
-            <div class="value-controls">
-                <div
-                    class="value"
-                    ${ref(this.node)}
-                    ${ref(this.renderFileTable.bind(this))}
-                ></div>
-                ${this.inputMethodView()}
-            </div>
+            <div ${ref(this.wrapperNode)} ${ref(this.renderFileTable.bind(this))}></div>
         `;
     }
     renderFileTable() {
-        const node = this.node.value;
+        const node = this.wrapperNode.value;
         if (node === undefined) return;
         render(this.fileTable(), node);
     }
@@ -56,7 +52,7 @@ export default class FilelistField extends Field {
                 this.inputMethod === 'form'
                     ? symbolButton({
                           icon: 'tabler-trash',
-                          title: 'drop file',
+                          title: `drop file ${print(file.name)}`,
                           //classes: ['right'],
                           '@click': this.dropFile.bind(this, idx),
                       })
@@ -80,6 +76,7 @@ export default class FilelistField extends Field {
                   ${symbolButton({
                       icon: 'tabler-square-rounded-plus',
                       title: 'add file',
+                      id: 'file-upload-button',
                       classes: ['right'],
                       '@click': this.clickFileInput,
                   })}
@@ -145,5 +142,16 @@ export default class FilelistField extends Field {
     fromFormValue(): undefined {}
     override toSourceValue(): string {
         return 'return value;';
+    }
+    override focus(): void {
+        if (this.inputMethod !== 'form') return;
+        requestAnimationFrame(() => {
+            const button =
+                this.wrapperNode.value?.querySelector<HTMLButtonElement>(
+                    '#file-upload-button',
+                );
+            if (!button) return;
+            focusForceVisible(button);
+        });
     }
 }

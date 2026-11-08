@@ -7,10 +7,10 @@ import { getType, isTypedArrayType } from '#lib/datatypes';
 
 type WrappedType = 'date' | 'bigint64array' | 'biguint64array' | 'arraybuffer' | 'bigint';
 
-interface WrappedValue {
+type WrappedValue = {
     idxdbmType: WrappedType;
     value: string;
-}
+};
 
 /**
  * replacer function for JSON.stringify(value, replacer) with support for

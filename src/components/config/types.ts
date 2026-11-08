@@ -3,21 +3,19 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import applicationDefaultOptions from './application-defaults';
-import { behaviorDefaultOptions } from './behavior-config';
-import { columnsDefaultOptions } from './columns-default';
-import { ConfigControl, CONFIG_REALMS } from './config-control';
-import { exportDefaultOptions } from './export-config';
-import { filtersDefaultOptions } from './filters-config';
-import { importDefaultOptions } from './import-config';
-import { AppTarget, RecordOf } from '#types';
+import type { ApplicationOptions } from './application-defaults';
+import type { BehaviorAllOptions, BehaviorOptions } from './behavior-defaults';
+import type { ColumnsOptions } from './columns-defaults';
+import type { ConfigControl } from './config-control';
+import type { ExportOptions } from './export-defaults';
+import type { FiltersOptions } from './filters-defaults';
+import type { ImportOptions } from './import-defaults';
+import type { AppTarget, RecordOf } from '#types';
 
 export type ControlInstance = InstanceType<typeof ConfigControl>;
 
-export type ConfigRealm = (typeof CONFIG_REALMS)[number];
-
 export type AllOptions = ApplicationOptions &
-    (BehaviorOptions & { onLoadTarget: AppTarget }) &
+    (BehaviorAllOptions & { onLoadTarget: AppTarget }) &
     ColumnsOptions &
     ExportOptions &
     FiltersOptions &
@@ -43,14 +41,9 @@ export type SelectOption = Option & {
     '@change'?: (event: Event) => void;
 };
 export type InputOption = Option & {
+    id: string;
     size?: number;
     class?: string | undefined;
+    type?: 'text' | 'number';
     '@change'?: (event: Event) => void;
 };
-
-export type ApplicationOptions = ReturnType<typeof applicationDefaultOptions>;
-export type BehaviorOptions = ReturnType<typeof behaviorDefaultOptions>;
-export type ColumnsOptions = ReturnType<typeof columnsDefaultOptions>;
-export type FiltersOptions = ReturnType<typeof filtersDefaultOptions>;
-export type ExportOptions = ReturnType<typeof exportDefaultOptions>;
-export type ImportOptions = ReturnType<typeof importDefaultOptions>;

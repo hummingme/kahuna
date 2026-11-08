@@ -15,17 +15,17 @@ import messageStack from '#components/messagestack';
 import schemaEditor from '#components/schema-editor';
 import tooltip from '#components/tooltip';
 import UpdateInfo from '#components/update-info';
+import { symbolButton } from '#components/parts/button';
+import svgIcon from '#components/parts/svgicon';
 import appStore from '#lib/app-store';
-import { button } from '#lib/button';
 import env from '#lib/environment';
 import messenger from '#lib/messenger';
 import { extensionUrl } from '#lib/runtime';
 import { settings } from '#lib/settings';
-import svgIcon from '#lib/svgicon';
 import { clamp, between, fetchFile, pickProperties } from '#lib/utils';
 import { AppWindowSettings } from '#types';
 
-interface AppWindowState {
+type AppWindowState = {
     visible: boolean;
     dim: AppWindowSettings;
     dragging: boolean;
@@ -33,8 +33,8 @@ interface AppWindowState {
     start: ActionStart;
     moveHandler: ExternMoveHandler | null;
     keyHandler: ExternKeyHandler | null;
-}
-interface ActionStart {
+};
+type ActionStart = {
     x: number;
     y: number;
     w: number;
@@ -46,22 +46,22 @@ interface ActionStart {
         height: number;
     };
     direction: string;
-}
-interface Resizers {
+};
+type Resizers = {
     border: HTMLElement | null;
     bottom: HTMLElement | null;
     nesw: HTMLElement | null;
     nwse: HTMLElement | null;
-}
-interface ExternMoveHandler {
+};
+type ExternMoveHandler = {
     isTarget: (event: MouseEvent) => boolean;
     start: (event: MouseEvent) => void;
     moving: (posX: number) => void;
     stop: (event: MouseEvent) => void;
-}
-interface ExternKeyHandler {
+};
+type ExternKeyHandler = {
     down: (Event: KeyboardEvent) => void;
-}
+};
 
 const AppWindow = class {
     #state: AppWindowState;
@@ -115,24 +115,25 @@ const AppWindow = class {
             direction: '',
         };
     }
-    init() {
+    async init() {
         this.#state.dim = settings.global('window');
-        fetchFile(extensionUrl('static/kahuna.css')).then((css) => {
-            const style = document.createElement('style');
-            style.innerText = css;
-            this.#root.appendChild(style);
-        });
-        fetchFile(extensionUrl('static/icons.svg')).then((svg) => {
-            const template = document.createElement('template');
-            template.innerHTML = svg;
-            const svgElement = Array.from(template.content.childNodes).find(
-                (node) => node.nodeName === 'svg',
-            );
-            this.#root.appendChild(svgElement!);
-        });
-        messenger.register('toggleVisibility', this.toggleVisibility.bind(this));
         this.setColorScheme();
         this.setColors();
+
+        const css = await fetchFile(extensionUrl('static/kahuna.css'));
+        const style = document.createElement('style');
+        style.innerText = css;
+        this.#root.appendChild(style);
+
+        const svg = await fetchFile(extensionUrl('static/icons.svg'));
+        const template = document.createElement('template');
+        template.innerHTML = svg;
+        const svgElement = Array.from(template.content.childNodes).find(
+            (node) => node instanceof SVGElement,
+        );
+        this.#root.appendChild(svgElement!);
+
+        messenger.register('toggleVisibility', this.toggleVisibility.bind(this));
         this.render();
         this.show();
     }
@@ -363,7 +364,7 @@ const AppWindow = class {
     };
     onPointerDown = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
-        const dragger = this.#root.querySelector('nav#menu > div');
+        const dragger = this.#root.querySelector('nav#toolbar > div');
         const dragging = target === dragger ? true : false;
         let resizing = false;
         let direction = '',
@@ -490,21 +491,19 @@ const AppWindow = class {
         event.stopPropagation();
     }
     maximizeButton() {
-        const icon = svgIcon('tabler-maximize', {
-            width: 14,
-            height: 14,
-            id: 'window-maximize',
-            'aria-hidden': true,
-        });
         const title = this.#state.dim.maximized
             ? 'restore window size'
             : 'maximize window';
-        return button({
-            content: icon,
+        return symbolButton({
             title,
-            'aria-label': title,
             class: 'maximize-window',
             '@click': this.toggleMaximized.bind(this),
+            aria: { label: title, controls: 'window' },
+            icon: svgIcon('tabler-maximize', {
+                width: 14,
+                height: 14,
+                id: 'window-maximize',
+            }),
         });
     }
     toggleMaximized() {

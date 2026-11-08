@@ -13,25 +13,26 @@ import importer from '#components/importer';
 import messageStack from '#components/messagestack';
 import Origin from '#components/origin';
 import schemaEditor from '#components/schema-editor';
+import checkbox from '#components/parts/checkbox';
+import textinput from '#components/parts/textinput';
+import { toolEntry, focusButton } from '#components/parts/tool-entry';
 import appStore from '#lib/app-store';
 import { isGlobal } from '#lib/app-target';
-import checkbox from '#lib/checkbox';
 import { getConnection, getDB } from '#lib/connection';
 import { copyTableData } from '#lib/dexie-utils';
-import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import { print, escapeUnicode, unescapeString } from '#lib/escape-string';
 import messenger from '#lib/messenger';
-import svgIcon from '#lib/svgicon';
-import textinput from '#lib/textinput';
 import { camelize, uniqueName } from '#lib/utils';
-import { KDatabase } from '#types';
+import { validateIndexesString } from '#lib/validations';
+import { KDatabase, Textinput } from '#types';
 
-interface DatabaseToolsState {
+type DatabaseToolsState = {
     dbname: string;
-    copyDatabaseName: string;
-    copyVersion: string;
-    copyData: boolean;
-    copyDisplayAfterwards: boolean;
-}
+    copyDbName: string;
+    copyDbVersion: string;
+    copyDbData: boolean;
+    copyDbDisplayAfterwards: boolean;
+};
 
 const state = Symbol('database-tools state');
 
@@ -40,10 +41,10 @@ const DatabaseTools = class {
     constructor() {
         this[state] = {
             dbname: '',
-            copyDatabaseName: '',
-            copyVersion: '1',
-            copyData: true,
-            copyDisplayAfterwards: true,
+            copyDbName: '',
+            copyDbVersion: '1',
+            copyDbData: true,
+            copyDbDisplayAfterwards: true,
         };
     }
     async summon(databaseIdx: number, anchorId: string) {
@@ -52,8 +53,8 @@ const DatabaseTools = class {
         this[state] = {
             ...this[state],
             dbname,
-            copyDatabaseName: this.uniqueDatabaseName(dbname),
-            copyVersion: version,
+            copyDbName: this.uniqueDatabaseName(dbname),
+            copyDbVersion: version,
         };
         await exporter.init({
             usage: 'database',
@@ -79,99 +80,91 @@ const DatabaseTools = class {
     view(): TemplateResult {
         const topic = configLayer.topic;
         return html`
-            <p>
-                <a @click=${configLayer.onTopicClicked} data-topic="export">
-                    ${svgIcon('tabler-upload')}
-                    <label>export database</label>
-                </a>
-                ${topic == 'export' ? exporter.panel() : ''}
-            </p>
-            <p>
-                <a @click=${configLayer.onTopicClicked} data-topic="copy">
-                    ${svgIcon('tabler-a-b-2')}
-                    <label>copy database</label>
-                </a>
-                ${topic == 'copy' ? this.copyPanel() : ''}
-            </p>
-            <p>
-                <a
-                    @click=${this.editDatabase.bind(null, this[state].dbname)}
-                    data-topic="edit"
-                >
-                    ${svgIcon('tabler-edit')}
-                    <label>edit schema</label>
-                </a>
-            </p>
-            <p>
-                <a @click=${configLayer.onTopicClicked} data-topic="create">
-                    ${svgIcon('tabler-square-rounded-plus')}
-                    <label>create table</label>
-                </a>
-                ${topic === 'create' ? this.createTablePanel() : ''}
-            </p>
-            <p>
-                <a @click=${configLayer.onTopicClicked} data-topic="import">
-                    ${svgIcon('tabler-download')}
-                    <label>import data</label>
-                </a>
-                ${topic === 'import' ? importer.panel() : ''}
-            </p>
-            <p>
-                <a @click=${configLayer.onTopicClicked} data-topic="delete">
-                    ${svgIcon('tabler-trash')}
-                    <label>delete database</label>
-                </a>
-                ${topic === 'delete'
-                    ? configLayer.confirmOption(
-                          'Are you sure to delete the database',
-                          escapeUnicode(this[state].dbname),
-                          appStore.state.loading,
-                      )
-                    : ''}
-            </p>
+            ${toolEntry({
+                label: 'export database',
+                topic: 'export',
+                panelOpen: topic === 'export',
+                iconName: 'tabler-upload',
+                panelView: () => exporter.panel(),
+                refVar: focusButton,
+            })}
+            ${toolEntry({
+                label: 'copy database',
+                topic: 'copy',
+                panelOpen: topic === 'copy',
+                iconName: 'tabler-a-b-2',
+                panelView: () => this.copyPanel(),
+            })}
+            ${toolEntry({
+                label: 'edit schema',
+                topic: 'edit',
+                iconName: 'tabler-edit',
+                onClick: () => this.editDatabase(this[state].dbname),
+                aria: {},
+            })}
+            ${toolEntry({
+                label: 'create table',
+                topic: 'create',
+                panelOpen: topic === 'create',
+                iconName: 'tabler-square-rounded-plus',
+                panelView: () => this.createTablePanel(),
+            })}
+            ${toolEntry({
+                label: 'import data',
+                topic: 'import',
+                panelOpen: topic === 'import',
+                iconName: 'tabler-download',
+                panelView: () => importer.panel(),
+            })}
+            ${toolEntry({
+                label: 'delete database',
+                topic: 'delete',
+                panelOpen: topic === 'delete',
+                iconName: 'tabler-trash',
+                panelView: () =>
+                    configLayer.confirmOption(
+                        'Are you sure to delete the database',
+                        this[state].dbname,
+                        appStore.state.loading,
+                    ),
+            })}
         `;
     }
     copyPanel(): TemplateResult {
         const content = html`
+            <div class="form-grid">
+                <label for="copy-db-name">database name</label>
+                ${textinput({
+                    id: 'copy-db-name',
+                    classes: ['resizable'],
+                    required: true,
+                    '.value': escapeUnicode(this[state].copyDbName),
+                    '@change': this.optionChanged.bind(this),
+                }).view()}
+                <label for="copy-db-version">database version</label>
+                ${textinput({
+                    id: 'copy-db_version',
+                    type: 'number',
+                    min: 1,
+                    '.value': this[state].copyDbVersion,
+                    '@change': this.optionChanged.bind(this),
+                }).view()}
+            </div>
             <div>
-                <div>
-                    <label for="copy-database-name">database name</label>
-                    ${textinput({
-                        id: 'copy-database-name',
-                        size: 15,
-                        class: 'right',
-                        required: true,
-                        '.value': escapeUnicode(this[state].copyDatabaseName),
-                        '@change': this.optionChanged.bind(this),
-                    })}
-                </div>
-                <div>
-                    <label for="copy-version">database version</label>
-                    ${textinput({
-                        id: 'copy-version',
-                        size: 5,
-                        type: 'number',
-                        min: 1,
-                        '.value': this[state].copyVersion,
-                        '@change': this.optionChanged.bind(this),
-                    })}
-                </div>
-                <div>
-                    ${checkbox({
-                        id: 'copy-data',
-                        label: 'copy data',
-                        checked: this[state].copyData,
-                        '@change': this.optionChanged.bind(this),
-                    })}
-                </div>
-                <div>
-                    ${checkbox({
-                        id: 'copy-display-afterwards',
-                        label: 'afterwards, display the copy',
-                        checked: this[state].copyDisplayAfterwards,
-                        '@change': this.optionChanged.bind(this),
-                    })}
-                </div>
+                ${checkbox({
+                    id: 'copy-db-data',
+                    label: 'copy data',
+                    checked: this[state].copyDbData,
+                    '@change': this.optionChanged.bind(this),
+                })}
+            </div>
+            <div>
+                ${checkbox({
+                    id: 'copy--db-display-afterwards',
+                    label: 'afterwards, display the copy',
+                    checked: this[state].copyDbDisplayAfterwards,
+                    '@change': this.optionChanged.bind(this),
+                })}
             </div>
         `;
         const button = { label: 'execute', handler: this.copyDatabase.bind(this) };
@@ -179,15 +172,19 @@ const DatabaseTools = class {
     }
     createTablePanel(): TemplateResult {
         const content = html`
-            <div>
-                <div>
-                    <label for="create-tablename">table name</label>
-                    <input type="text" id="create-tablename" class="right" size="15" />
-                </div>
-                <div>
-                    <label for="create-indexes">indexes</label>
-                    <input type="text" id="create-indexes" class="right" size="15" />
-                </div>
+            <div class="form-grid">
+                <label for="create-table-name">table name</label>
+                ${textinput({
+                    id: 'create-table-name',
+                    classes: ['resizable'],
+                    required: true,
+                }).view()}
+                <label for="create-indexes">indexes</label>
+                ${textinput({
+                    id: 'create-table-indexes',
+                    classes: ['resizable'],
+                    '@input': this.onTableIndexesInput,
+                }).view()}
             </div>
         `;
         const button = { label: 'create', handler: this.createTable.bind(this) };
@@ -198,37 +195,43 @@ const DatabaseTools = class {
         const option = camelize(target.id);
         if (
             [
-                'copyDatabaseName',
-                'copyData',
-                'copyDisplayAfterwards',
-                'copyVersion',
+                'copyDbDatabaseName',
+                'copyDbData',
+                'copyDbDisplayAfterwards',
+                'copyDbVersion',
             ].includes(option)
         ) {
             const value = ['copyData', 'copyDisplayAfterwards'].includes(option)
                 ? target.checked
-                : unescapeUnicode(target.value.trim());
+                : unescapeString(target.value.trim());
             this[state] = { ...this[state], [option]: value };
         }
     }
+    onTableIndexesInput(input: Textinput) {
+        const indexes = input.node.value.trim();
+        input.node.setCustomValidity(
+            validateIndexesString(indexes) ? '' : 'invalid index specification',
+        );
+    }
     async copyDatabase(): Promise<void> {
-        const { dbname: source, copyDatabaseName: target } = this[state];
-        const { copyVersion, copyData, copyDisplayAfterwards } = this[state];
-        const error = this.validateCopyOptions(target, copyVersion);
+        const { dbname: source, copyDbName: target } = this[state];
+        const { copyDbVersion, copyDbData, copyDbDisplayAfterwards } = this[state];
+        const error = this.validateCopyOptions(target, copyDbVersion);
         if (typeof error === 'object') {
             messageStack.display(error);
             return;
         }
         appStore.update({
             loading: true,
-            loadingMsg: `copying database, source: ${escapeUnicode(source)}, target: ${escapeUnicode(target)}`,
+            loadingMsg: `copying database, source: ${print(source)}, target: ${print(target)}`,
         });
         configLayer.close();
         try {
             const schema = Database.schema(await Database.getTables(source));
             const db = getDB(target);
-            db.version(parseInt(copyVersion) / 10).stores(schema);
+            db.version(parseInt(copyDbVersion) / 10).stores(schema);
             const dbhandle = await getConnection(target);
-            if (copyData) {
+            if (copyDbData) {
                 for (const table of dbhandle.tables) {
                     await copyTableData(
                         { table: table.name, database: source },
@@ -242,14 +245,14 @@ const DatabaseTools = class {
         } finally {
             appStore.update({ loading: false, loadingMsg: '' });
         }
-        if (copyDisplayAfterwards) {
+        if (copyDbDisplayAfterwards) {
             appStore.update({ databases: await Origin.getDatabases() });
             Database.summon(appStore.databaseIdx(target));
         } else if (isGlobal(appStore.target())) {
             Origin.summon();
         }
         messageStack.displaySuccess(
-            `Database copied! (source: ${escapeUnicode(source)}, target: ${escapeUnicode(target)})`,
+            `Database copied! (source: ${print(source)}, target: ${print(target)})`,
         );
     }
     validateCopyOptions(databaseName: string, version: string): object | undefined {
@@ -283,10 +286,12 @@ const DatabaseTools = class {
         const node = configLayer.getNode();
         if (node === undefined) return;
         const tablenameInput = node.querySelector(
-            '#create-tablename',
+            '#create-table-name',
         ) as HTMLInputElement;
-        const tablename = unescapeUnicode(tablenameInput.value.trim());
-        const indexesInput = node.querySelector('#create-indexes') as HTMLInputElement;
+        const tablename = unescapeString(tablenameInput.value.trim());
+        const indexesInput = node.querySelector(
+            '#create-table-indexes',
+        ) as HTMLInputElement;
         const indexes = indexesInput.value.trim();
         if (tablename.length > 0) {
             appStore.update({

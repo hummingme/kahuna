@@ -14,6 +14,7 @@ import textInput from '#components/value-editor/text-input';
 import { validatePositiveInteger } from '#components/value-editor/validations';
 import messageStack from '#components/messagestack';
 import { formattedNumericArray } from '#lib/value-formatter';
+import { BUFFER_MAX_LENGTH, VERY_LARGE_VALUE, RememberedValue } from '#types';
 
 export default class ImagedataField extends Field {
     nodeWidth: Ref<HTMLInputElement> = createRef();
@@ -23,34 +24,35 @@ export default class ImagedataField extends Field {
         super(args);
         this.initialData = structuredClone(this.value);
     }
-    view() {
+    formView() {
         const { width, height } = this.value;
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(
-                        this,
-                        {
-                            id: 'bitmap-width',
-                            '.value': String(width),
-                            size: 10,
-                            label: 'width',
-                            disabled: this.inputMethod !== 'form',
-                            refVar: this.nodeWidth,
-                        },
-                        true,
-                    )}
-                    ${textInput(this, {
-                        id: 'bitmap-height',
-                        '.value': String(height),
-                        size: 10,
-                        label: 'height',
-                        disabled: this.inputMethod !== 'form',
-                        refVar: this.nodeHeight,
-                    })}
-                </div>
-                ${this.inputMethodView()}
-            </div>
+            ${textInput(
+                this,
+                {
+                    id: this.valueInputId('bitmap-width'),
+                    '.value': String(width),
+                    type: 'number',
+                    min: 0,
+                    max: BUFFER_MAX_LENGTH,
+                    style: 'width: 13ch;',
+                    label: 'width',
+                    disabled: this.inputMethod !== 'form',
+                    refVar: this.nodeWidth,
+                },
+                true,
+            )}
+            ${textInput(this, {
+                id: this.valueInputId('bitmap-height'),
+                '.value': String(height),
+                type: 'number',
+                min: 0,
+                max: BUFFER_MAX_LENGTH,
+                style: 'width: 13ch;',
+                label: 'height',
+                disabled: this.inputMethod !== 'form',
+                refVar: this.nodeHeight,
+            })}
         `;
     }
     get value(): ImageData {
@@ -83,16 +85,23 @@ export default class ImagedataField extends Field {
         }
     }
     fromFormValue() {
+        const fieldValues = this.valuesFromForm();
+        if (!fieldValues) return;
+        const { width, height } = fieldValues;
+        if (width === this.initialData.width && height === this.initialData.height) {
+            return structuredClone(this.initialData);
+        }
+        return this.copyImageDataPixels(width, height, this.initialData);
+    }
+    valuesFromForm() {
         if (
             this.nodeWidth.value instanceof HTMLInputElement &&
             this.nodeHeight.value instanceof HTMLInputElement
         ) {
-            const width = Number(this.nodeWidth.value.value);
-            const height = Number(this.nodeHeight.value.value);
-            if (width === this.initialData.width && height === this.initialData.height) {
-                return structuredClone(this.initialData);
-            }
-            return this.copyImageDataPixels(width, height, this.initialData);
+            return {
+                width: Number(this.nodeWidth.value.value),
+                height: Number(this.nodeHeight.value.value),
+            };
         }
     }
     validate() {
@@ -114,6 +123,16 @@ export default class ImagedataField extends Field {
         super.update(value, options);
         this.toFormValue();
     }
+    valueChanged(remembered: RememberedValue) {
+        const oldValue = remembered.value;
+        if (!(oldValue instanceof ImageData)) return true;
+
+        const fieldValues = this.valuesFromForm();
+        if (!fieldValues) return;
+
+        const { width, height } = fieldValues;
+        return width !== oldValue.width || height !== oldValue.height;
+    }
     override async handleUploadedValue(file: File) {
         const { name, type, lastModified } = file;
         if (!(file instanceof File)) {
@@ -124,9 +143,9 @@ export default class ImagedataField extends Field {
             this.update(value);
         }
     }
-    override toSourceValue(expanded: boolean): string {
+    override toSourceValue(compacted: boolean): string {
         if (!(this.value instanceof ImageData)) return '';
-        if (!expanded) return 'return value;';
+        if (compacted) return 'return value;';
 
         const { width, height, colorSpace } = this.value;
         const isFloat16 =
@@ -137,7 +156,7 @@ export default class ImagedataField extends Field {
         const arr = formattedNumericArray(
             data,
             isFloat16 ? 'float16array' : 'uint8clampedarray',
-            this.formOptions({ expanded, perLine: 16 }),
+            this.formOptions({ compacted, perLine: 16 }),
         );
         const typeName = isFloat16 ? 'Float16Array' : 'Uint8ClampedArray';
         const settings = [`colorSpace: '${colorSpace}'`];
@@ -150,7 +169,6 @@ function dataArray() {
     return new ${typeName}(${arr});
 }`;
     }
-
     async imageToImageData(image: ImageBitmapSource): Promise<ImageData | void> {
         const bitmap = await globalThis
             .createImageBitmap(image, {
@@ -206,4 +224,10 @@ function dataArray() {
 Increasing the width or height fills the added area
 with transparent pixels.`,
     };
+    override isVeryLargeValue(): boolean {
+        return this.value.data.byteLength >= VERY_LARGE_VALUE;
+    }
+    override focus() {
+        super.focus(this.nodeWidth.value);
+    }
 }

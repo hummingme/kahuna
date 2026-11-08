@@ -13,30 +13,27 @@ import messageStack from '#components/messagestack';
 export default class ImagebitmapField extends Field {
     nodeWidth: Ref<HTMLInputElement> = createRef();
     nodeHeight: Ref<HTMLInputElement> = createRef();
-    view() {
+    formView() {
         const { width, height } = this.value;
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(this, {
-                        id: 'bitmap-width',
-                        '.value': String(width),
-                        size: 10,
-                        label: 'width',
-                        disabled: true,
-                        refVar: this.nodeWidth,
-                    })}
-                    ${textInput(this, {
-                        id: 'bitmap-height',
-                        '.value': String(height),
-                        size: 10,
-                        label: 'height',
-                        disabled: true,
-                        refVar: this.nodeHeight,
-                    })}
-                </div>
-                ${this.inputMethodView()}
-            </div>
+            ${textInput(this, {
+                id: this.valueInputId('width'),
+                '.value': String(width),
+                type: 'number',
+                style: 'width: 8ch;',
+                label: 'width',
+                disabled: true,
+                refVar: this.nodeWidth,
+            })}
+            ${textInput(this, {
+                id: this.valueInputId('height'),
+                '.value': String(height),
+                type: 'number',
+                style: 'width: 8ch;',
+                label: 'height',
+                disabled: true,
+                refVar: this.nodeHeight,
+            })}
         `;
     }
     get value(): ImageBitmap {
@@ -85,8 +82,8 @@ export default class ImagebitmapField extends Field {
             );
         }
     }
-    override toSourceValue(expanded: boolean): string {
-        if (!expanded) return 'return value;';
+    override toSourceValue(compacted: boolean): string {
+        if (compacted) return 'return value;';
         let source = '';
         if (this.value instanceof ImageBitmap) {
             const { width, height } = this.value;

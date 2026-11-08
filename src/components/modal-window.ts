@@ -11,13 +11,13 @@ import Layer from '#components/layer';
 import appStore from '#lib/app-store';
 import Draggable from '#lib/draggable';
 
-interface ModalWindowState {
+type ModalWindowState = {
     visible: boolean;
-}
-interface ModalWindowOptions {
+};
+type ModalWindowOptions = {
     closeHandler?: () => void;
     visibilityProperty?: string;
-}
+};
 
 const state = Symbol('modal window state');
 
@@ -47,7 +47,8 @@ class ModalWindow {
         appWindow.removeInputHandler();
         appWindow.showOverlay();
         this.#layer.addEscLayerHandler();
-        this.#layer.addClickWindowHandler(appWindow.win);
+        // on initial load the appWindow node may not yet exist
+        setTimeout(() => this.#layer.addClickWindowHandler(appWindow.win), 100);
         this.update({
             visible: true,
         });

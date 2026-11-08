@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-type ApplicationDefaultOptions = {
+export type ApplicationOptions = {
     colorScheme: 'browser' | 'dark' | 'light';
     colorSchemeOrigin: 'same' | 'dark' | 'light';
     colorStringDarkmode: string;
@@ -14,7 +14,7 @@ type ApplicationDefaultOptions = {
     ignoreDatabases: string[];
 };
 
-const applicationDefaultOptions = (): ApplicationDefaultOptions => {
+export const applicationDefaultOptions = (): ApplicationOptions => {
     return {
         colorScheme: 'browser',
         colorSchemeOrigin: 'same',
@@ -26,5 +26,3 @@ const applicationDefaultOptions = (): ApplicationDefaultOptions => {
         ignoreDatabases: ['__dbnames'],
     };
 };
-
-export default applicationDefaultOptions;

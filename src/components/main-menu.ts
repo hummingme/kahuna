@@ -4,26 +4,28 @@
  */
 
 import { html, TemplateResult } from 'lit-html';
+import { ref } from 'lit/directives/ref.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
 import appWindow from '#components/app-window';
 import Layer from '#components/layer';
 import displayConfigControl from '#components/config/config-control';
+import svgIcon from '#components/parts/svgicon';
 import appStore from '#lib/app-store';
 import { globalTarget } from '#lib/app-target';
-import svgIcon from '#lib/svgicon';
 import { EMPTY_POSITION, Position } from '#types';
 
-interface MainMenuState {
+type MainMenuState = {
     visible: boolean;
     position: Position;
-}
+};
 
 const state = Symbol('menu state');
 
 const MainMenu = class {
     [state]: MainMenuState;
     #layer;
+    #anchor?: HTMLButtonElement;
     constructor() {
         this[state] = this.#initState;
         this.#layer = new Layer({ closeHandler: this.close.bind(this) });
@@ -39,21 +41,20 @@ const MainMenu = class {
         appStore.rerender();
     }
     show(event: MouseEvent): void {
-        const target = event.target as Element;
-        const anchor = target.closest('button');
-        const position =
-            anchor instanceof Element
-                ? this.#layer.anchorPosition(anchor)
-                : EMPTY_POSITION;
-
+        const anchor = event.currentTarget;
+        if (!(anchor instanceof HTMLButtonElement)) return;
+        this.#anchor = anchor;
         appWindow.removeInputHandler();
         appWindow.showOverlay();
         this.#layer.addEscLayerHandler();
         this.#layer.addClickWindowHandler(appWindow.win);
-        this.update({ visible: true, position });
+        this.update({ visible: true, position: this.#layer.anchorPosition(anchor) });
     }
     close() {
-        if (this[state].visible === true) {
+        if (this[state].visible === true && this.#anchor) {
+            this.#anchor.setAttribute('aria-expanded', 'false');
+            this.#anchor.removeAttribute('aria-controls');
+            this.#anchor.focus();
             this.#layer.removeEscLayerHandler();
             this.#layer.removeClickWindowHandler(appWindow.win);
             appWindow.addInputHandler();
@@ -71,24 +72,47 @@ const MainMenu = class {
                     class="layer"
                     style=${styleMap({ top, left })}
                     @click=${this.click.bind(this)}
+                    ${ref(this.nodeReady.bind(this))}
                 >
-                    <a data-subject="settings">Settings</a>
-                    <a href="https://hummingme.github.io/kahuna-docs/" target="_blank">
+                    <button type="button" data-subject="settings">Settings</button>
+                    <a
+                        href="https://hummingme.github.io/kahuna-docs/"
+                        target="_blank"
+                        tabindex="0"
+                    >
                         Documentation ${svgIcon('tabler-external-link', { width: 14 })}
                     </a>
-                    <a href="https://github.com/hummingme/kahuna" target="_blank">
+                    <a
+                        href="https://github.com/hummingme/kahuna"
+                        target="_blank"
+                        tabindex="0"
+                    >
                         Github ${svgIcon('tabler-external-link', { width: 14 })}
                     </a>
-                    <a data-subject="about">About</a>
+                    <button data-subject="about">About</button>
                 </div>
             `;
         } else {
             return '';
         }
     }
+    nodeReady(node?: Element) {
+        const anchor = this.#anchor;
+        if (node instanceof HTMLDivElement && anchor) {
+            anchor.setAttribute('aria-controls', 'main-menu');
+            anchor.setAttribute('aria-expanded', 'true');
+            const item = node.firstElementChild;
+            if (item instanceof HTMLButtonElement) {
+                requestAnimationFrame(() => {
+                    item.focus();
+                });
+            }
+        }
+    }
     click(event: MouseEvent): void {
-        const target = event.target as Element;
-        if (target instanceof HTMLAnchorElement) {
+        const target = event.target;
+
+        if (target instanceof HTMLElement) {
             event.stopPropagation();
             this.close();
             const subject = target.dataset.subject;

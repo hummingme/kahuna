@@ -7,18 +7,18 @@ import { html } from 'lit-html';
 import { ref } from 'lit/directives/ref.js';
 
 import appWindow from '#components/app-window';
+import { symbolButton } from '#components/parts/button';
 import appStore from '#lib/app-store';
-import { symbolButton } from '#lib/button';
 
-interface LoadingPanelState {
+type LoadingPanelState = {
     visible: boolean;
     onStop: (() => Promise<void>) | null;
-}
-export interface LoadingViewParams {
+};
+export type LoadingViewParams = {
     loading: boolean;
     loadingMsg: string;
     loadingStop: (() => Promise<void>) | null;
-}
+};
 
 const state = Symbol('loadingpanel state');
 

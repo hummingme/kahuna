@@ -11,17 +11,23 @@ export async function decodeFromFile(file: File, label: Charset) {
         // this happens in firefox for uploaded files
         buffer = structuredClone(buffer);
     }
-    const bytes = new Uint8Array(buffer);
+
     if (label === 'utf-8') {
         return await file.text();
-    } else if (isSBCS(label)) {
+    }
+
+    const bytes = new Uint8Array(buffer);
+    if (isSBCS(label)) {
         return decodeSbcs(bytes, label);
-    } else if (label === 'utf-16be' || label === 'utf-16le') {
+    }
+    if (label === 'utf-16be' || label === 'utf-16le') {
         const endian = label === 'utf-16be' ? 'be' : 'le';
         return decodeUtf16(bytes, endian);
-    } else {
-        return new TextDecoder(label).decode(bytes);
     }
+    if (label === 'binary') {
+        return decodeBinary(bytes);
+    }
+    return new TextDecoder(label).decode(bytes);
 }
 
 function decodeUtf16(bytes: Uint8Array, endian: 'le' | 'be'): string {
@@ -62,4 +68,8 @@ function getSbcsDecoderTable(label: SBCSCharset): Uint16Array {
     }
     sbcsDecoderCache.set(label, table);
     return table;
+}
+
+function decodeBinary(bytes: Uint8Array): string {
+    return String.fromCharCode(...bytes);
 }

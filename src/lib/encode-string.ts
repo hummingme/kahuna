@@ -12,14 +12,18 @@ export function encodeString(
 ): Uint8Array<ArrayBuffer> {
     if (label === 'utf-8') {
         return new TextEncoder().encode(str);
-    } else if (isSBCS(label)) {
+    }
+    if (label === 'binary') {
+        return encodeBinary(str);
+    }
+    if (isSBCS(label)) {
         return encodeSbcs(str, label);
-    } else if (label === 'utf-16be' || label === 'utf-16le') {
+    }
+    if (label === 'utf-16be' || label === 'utf-16le') {
         const isLittle = label === 'utf-16le';
         return encodeUTF16(str, isLittle);
-    } else {
-        throw new Error(`encodeString() called withs unsupportet charset ${label}`);
     }
+    throw new Error(`encodeString() called withs unsupportet charset ${label}`);
 }
 
 const sbcsEncoderCache = new Map<string, Uint16Array>();
@@ -59,4 +63,8 @@ function encodeUTF16(str: string, isLittle: boolean): Uint8Array<ArrayBuffer> {
         view.setUint16(i * 2, str.charCodeAt(i), isLittle);
     }
     return out;
+}
+
+function encodeBinary(str: string): Uint8Array<ArrayBuffer> {
+    return Uint8Array.from(str, (char) => char.charCodeAt(0));
 }

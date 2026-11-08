@@ -3,18 +3,12 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
-
 import Field from '#components/value-editor/fields/field';
-import numberInput from '#components/value-editor/number-input';
+import textInput from '#components/value-editor/text-input';
 
 export default class BigintField extends Field {
-    view() {
-        return html`
-            <div class="value-controls">
-                ${numberInput(this)} ${this.inputMethodView()}
-            </div>
-        `;
+    formView() {
+        return textInput(this, { classes: ['resizable'] }, true);
     }
     get value(): bigint {
         return this.state.value as bigint;
@@ -27,14 +21,14 @@ export default class BigintField extends Field {
         return `${this.value.toString()}n`;
     }
     fromFormValue(): bigint | undefined {
-        if (this.node.value instanceof HTMLInputElement) {
-            const value = this.node.value.value.trim();
+        if (this.nodeInput instanceof HTMLInputElement) {
+            const value = this.nodeInput.value.trim();
             const result = this.toBigInt(this.removeTrailingN(value));
             return typeof result === 'bigint' ? result : 0n;
         }
     }
     validate() {
-        const input = this.node.value;
+        const input = this.nodeInput;
         if (input instanceof HTMLInputElement) {
             const result = this.toBigInt(this.removeTrailingN(input.value.trim()));
             this.valid = typeof result === 'bigint';

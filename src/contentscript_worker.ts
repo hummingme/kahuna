@@ -7,6 +7,7 @@ import { executeCode } from '#lib/execute-code';
 import { encodeQueryResult, encodeValue } from '#lib/data-wrapper';
 import { queryData } from '#lib/querydata';
 import { Message } from '#types';
+import { checkUnsafeEval } from '#lib/utils';
 
 self.onmessage = async (event) => {
     const message: Message = event.data;
@@ -31,7 +32,7 @@ self.onmessage = async (event) => {
             const result = await executeCode(load);
             self.postMessage({
                 type: 'codeExecuted',
-                client: load.client,
+                user: load.user,
                 result: load.encodeResult ? encodeValue(result) : result,
             });
         } catch (error) {
@@ -42,6 +43,7 @@ self.onmessage = async (event) => {
             type: 'checkFlawsResult',
             result: {
                 BigInt64Array: new BigInt64Array([1n]),
+                unsafeEvalWorker: await checkUnsafeEval(),
             },
         });
     }

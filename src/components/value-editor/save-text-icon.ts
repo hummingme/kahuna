@@ -5,18 +5,18 @@
 
 import { html } from 'lit-html';
 import { nothing } from 'lit';
-import type Field from '#components/value-editor/fields/field';
-import { encodeString } from '#lib/encode-string';
 
-import svgIcon from '#lib/svgicon';
+import svgIcon from '#components/parts/svgicon';
+import type Field from '#components/value-editor/fields/field';
 import { isSBCS } from '#lib/charsets';
+import { encodeString } from '#lib/encode-string';
 import { downloadFile } from '#lib/utils';
 
 export default function saveTextIcon(field: Field) {
     const { type, downloadCharset } = field.state;
     const title = `save as ${downloadCharset} encoded file`;
     const encodable =
-        ['utf-8', 'utf-16le', 'utf-16be'].includes(downloadCharset) ||
+        ['utf-8', 'utf-16le', 'utf-16be', 'binary'].includes(downloadCharset) ||
         isSBCS(downloadCharset);
     return type === 'string' && encodable
         ? html`

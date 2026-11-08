@@ -7,20 +7,22 @@ import { html, type TemplateResult } from 'lit-html';
 import { map } from 'lit/directives/map.js';
 import { Dexie } from 'dexie';
 
+import configLayer from '#components/configlayer';
 import Database from '#components/database';
 import databaseTools from '#components/database-tools';
 import datatable from '#components/datatable';
 import OriginTools from '#components/origin-tools';
-import configLayer from '#components/configlayer';
-import displayConfigControl from '#components/config/config-control';
+import { symbolButton } from '#components/parts/button';
+import JsConsoleIcon from '#components/parts/js-console-icon';
+import SettingsIcon from '#components/parts/settings-icon';
 import appStore from '#lib/app-store';
-import { symbolButton } from '#lib/button';
 import { getConnection } from '#lib/connection';
-import { escapeUnicode } from '#lib/escape-unicode';
+import env from '#lib/environment';
+import { print } from '#lib/escape-string';
 import messenger from '#lib/messenger';
 import settings from '#lib/settings';
 import { rowIndex } from '#lib/utils';
-import type { KDatabase } from '#types';
+import type { KDatabase, SymbolButtonProps } from '#types';
 
 const summon = async () => {
     if (typeof appStore.state.selectedTable === 'number') {
@@ -48,6 +50,7 @@ async function getDatabases(): Promise<KDatabase[]> {
             tables: dbHandle.tables.map((table) => table.name),
         });
     }
+    databases.sort((a, b) => a.name.localeCompare(b.name));
     return databases;
 }
 
@@ -55,30 +58,36 @@ const originToolsClicked = () => {
     OriginTools.summon(originToolsButtonId);
 };
 
-const settingsConfigClicked = () => {
-    displayConfigControl({
-        target: appStore.target(),
-        anchorId: 'settings-config',
-    });
-};
-
 const originToolsButtonId = 'origin-tools-button-id';
 const databaseToolsButtonId = 'database-tools-button-id';
 
-const breadcrumbIcons = [
-    {
-        icon: 'tabler-settings',
-        '@click': originToolsClicked,
-        title: 'origin tools',
-        id: originToolsButtonId,
-    },
-    {
-        icon: 'tabler-adjustments',
-        title: 'origin settings and configuration',
-        '@click': settingsConfigClicked,
-        id: 'settings-config',
-    },
-];
+const toolbarIcons = () => {
+    const icons: SymbolButtonProps[] = [
+        {
+            title: 'origin tools',
+            id: originToolsButtonId,
+            '@click': originToolsClicked,
+            aria: {
+                haspopup: true,
+                expanded: false,
+                label: 'origin tools',
+            },
+            icon: 'tabler-settings',
+        },
+        new SettingsIcon().props(appStore.target()),
+    ];
+    if (env.codeExecution) {
+        icons.push(
+            new JsConsoleIcon().props({
+                user: 'origin',
+                target: appStore.target(),
+                executed: () => summon(),
+            }),
+        );
+    }
+
+    return icons;
+};
 
 const template = (databases: KDatabase[]): TemplateResult => {
     const cnt = databases.length;
@@ -102,12 +111,8 @@ const template = (databases: KDatabase[]): TemplateResult => {
                       ${map(
                           databases,
                           (db, idx) => html`
-                              <tr
-                                  title="click to load the database ${escapeUnicode(
-                                      db.name,
-                                  )}"
-                              >
-                                  <td>${escapeUnicode(db.name)}</td>
+                              <tr title="click to load the database ${print(db.name)}">
+                                  <td>${print(db.name)}</td>
                                   <td class="center">${db.version}</td>
                                   <td class="center">${db.tables.length}</td>
                                   <td class="row-icons">
@@ -168,7 +173,7 @@ const Origin = {
     summon,
     template,
     getDatabases,
-    breadcrumbIcons,
+    toolbarIcons,
 };
 
 export default Origin;

@@ -6,11 +6,12 @@
 import { exportDB, ExportOptions, importDB } from 'dexie-export-import';
 
 import { getConnection } from '#lib/connection';
+import { EXPORT_IMPORT_AVAILABLE } from '#lib/constants';
 import { dexieExportFilter } from '#lib/dexie-utils';
 import { downloadFile } from '#lib/utils';
 import { InjectedExportArgs, InjectedImportArgs, Message } from '#types';
 
-document.documentElement.setAttribute('data-kahuna-export-import-available', '1');
+document.documentElement.setAttribute(EXPORT_IMPORT_AVAILABLE, '1');
 
 window.addEventListener('message', async (event) => {
     const msg: Message = event.data;

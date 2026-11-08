@@ -5,12 +5,13 @@
 
 import Field from '#components/value-editor/fields/field';
 import { jsonAllowedValuesHint, useCodeareaHint } from '#components/value-editor/hints';
-import { valueControlsTextareaView } from '#components/value-editor/view-utils';
+import { isFlexInputNode } from '#components/value-editor/flex-input';
 import { isPlainObject } from '#lib/datatypes';
 
 export default class MapField extends Field {
-    view() {
-        return valueControlsTextareaView(this);
+    formView() {
+        const value = this.toFormValue() || '';
+        return this.flexInput ? this.flexInput.view(value) : '';
     }
     set value(value: unknown) {
         let result: Map<unknown, unknown> = new Map();
@@ -28,21 +29,21 @@ export default class MapField extends Field {
     }
     toFormValue(): string {
         const options = this.formOptions();
-        return this.state.inputMethod === 'form' && options.expanded
-            ? this.stringFormatter.render(
+        return this.state.inputMethod === 'form' && options.compacted
+            ? this.stringFormatter.render(this.value, 'map', options)
+            : this.stringFormatter.render(
                   [...this.value.entries()],
                   'array',
                   Object.assign(options, { escapeForJson: true }),
-              )
-            : this.stringFormatter.render(this.value, 'map', options);
+              );
     }
     fromFormValue(): Map<unknown, unknown> | undefined {
         if (this.state.inputMethod === 'form') {
-            const textarea = this.node.value;
-            if (textarea instanceof HTMLTextAreaElement) {
+            const node = this.nodeInput;
+            if (isFlexInputNode(node)) {
                 let value = new Map();
                 try {
-                    const parsed = JSON.parse(textarea.value);
+                    const parsed = JSON.parse(node.value);
                     if (this.isMapLikeArray(parsed)) {
                         value = new Map(parsed);
                     }
@@ -57,14 +58,14 @@ export default class MapField extends Field {
             value.every((ele) => Array.isArray(ele) && ele.length === 2)
         );
     }
-    validateTextareaValue(value: string) {
+    validate(value: string) {
         let parsed: unknown[] | null = null;
         try {
             parsed = JSON.parse(value);
         } catch {} // eslint-disable-line no-empty
         return this.isMapLikeArray(parsed);
     }
-    invalidTextareaHint =
+    override invalidHint =
         'The form value must be an array of tuple arrays in json syntax (e.g. [["a",1], ["b",22]] )!';
     hints = {
         form: `The form input for a Map must be an array of tuple arrays

@@ -17,41 +17,40 @@ export default class DomquadField extends Field {
     nodeP2: Ref<HTMLInputElement> = createRef();
     nodeP3: Ref<HTMLInputElement> = createRef();
     nodeP4: Ref<HTMLInputElement> = createRef();
-    view() {
+    formView() {
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(
-                        this,
-                        {
-                            id: 'p1-coordinates',
-                            '.value': this.pointToFieldValue(this.value.p1),
-                            label: 'p1',
-                            refVar: this.nodeP1,
-                        },
-                        true,
-                    )}
-                    ${textInput(this, {
-                        id: 'p2-coordinates',
-                        '.value': this.pointToFieldValue(this.value.p2),
-                        label: 'p2',
-                        refVar: this.nodeP2,
-                    })}
-                    ${textInput(this, {
-                        id: 'p3-coordinates',
-                        '.value': this.pointToFieldValue(this.value.p3),
-                        label: 'p3',
-                        refVar: this.nodeP3,
-                    })}
-                    ${textInput(this, {
-                        id: 'p4-coordinates',
-                        '.value': this.pointToFieldValue(this.value.p4),
-                        label: 'p4',
-                        refVar: this.nodeP4,
-                    })}
-                </div>
-                ${this.inputMethodView()}
-            </div>
+            ${textInput(
+                this,
+                {
+                    id: this.valueInputId('p1'),
+                    '.value': this.pointToFieldValue(this.value.p1),
+                    label: 'p1',
+                    classes: ['resizable'],
+                    refVar: this.nodeP1,
+                },
+                true,
+            )}
+            ${textInput(this, {
+                id: this.valueInputId('p2'),
+                '.value': this.pointToFieldValue(this.value.p2),
+                label: 'p2',
+                classes: ['resizable'],
+                refVar: this.nodeP2,
+            })}
+            ${textInput(this, {
+                id: this.valueInputId('p3'),
+                '.value': this.pointToFieldValue(this.value.p3),
+                label: 'p3',
+                classes: ['resizable'],
+                refVar: this.nodeP3,
+            })}
+            ${textInput(this, {
+                id: this.valueInputId('p4'),
+                '.value': this.pointToFieldValue(this.value.p4),
+                label: 'p4',
+                classes: ['resizable'],
+                refVar: this.nodeP4,
+            })}
         `;
     }
     get value(): DOMQuad {
@@ -99,4 +98,7 @@ arguments p1 to p4 are DomPoint arguments
 in the form of a comma separated list of
 0 to 4 numbers: x, y, z, w.`,
     };
+    override focus(): void {
+        super.focus(this.nodeP1.value);
+    }
 }

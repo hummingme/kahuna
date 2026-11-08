@@ -3,52 +3,50 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html, TemplateResult } from 'lit-html';
+import { html } from 'lit-html';
 
 import Field from '#components/value-editor/fields/field';
 import textInput from '#components/value-editor/text-input';
 
 export default class CryptokeyField extends Field {
-    view() {
-        let form: TemplateResult | string = '';
+    formView() {
         if (this.value?.algorithm) {
             // Chromium only, in Firefox the CryptoKey properties cannot be read
             const algo = this.value.algorithm;
             const length = 'length' in algo ? `, ${algo.length}` : '';
             const algoValue = `${algo.name}${length}`;
-            form = html`
-                <div class="value">
-                    ${textInput(this, {
-                        id: 'cryptokey-algorithm',
-                        '.value': algoValue,
-                        size: 20,
-                        label: 'algorithm',
-                    })}
-                    ${textInput(this, {
-                        id: 'cryptokey-type',
-                        '.value': this.value.type,
-                        size: 20,
-                        label: 'type',
-                    })}
-                    ${textInput(this, {
-                        id: 'cryptokey-usages',
-                        '.value': this.value.usages.join(', '),
-                        size: 20,
-                        label: 'usages',
-                    })}
-                    ${textInput(this, {
-                        id: 'cryptokey-extractable',
-                        '.value': String(this.value.extractable),
-                        size: 20,
-                        label: 'usages',
-                    })}
-                </div>
+            return html`
+                ${textInput(this, {
+                    id: this.valueInputId('algorithm'),
+                    '.value': algoValue,
+                    classes: ['resizable'],
+                    style: 'width: 20ch;',
+                    label: 'algorithm',
+                })}
+                ${textInput(this, {
+                    id: this.valueInputId('type'),
+                    '.value': this.value.type,
+                    classes: ['resizable'],
+                    style: 'width: 20ch;',
+                    label: 'type',
+                })}
+                ${textInput(this, {
+                    id: this.valueInputId('usages'),
+                    '.value': this.value.usages.join(', '),
+                    classes: ['resizable'],
+                    style: 'width: 20ch;',
+                    label: 'usages',
+                })}
+                ${textInput(this, {
+                    id: this.valueInputId('extractable'),
+                    '.value': String(this.value.extractable),
+                    classes: ['resizable'],
+                    style: 'width: 20ch;',
+                    label: 'extractable',
+                })}
             `;
         }
-
-        return html`
-            <div class="value-controls">${form}${this.inputMethodView()}</div>
-        `;
+        return '';
     }
     get value(): CryptoKey {
         return this.state.value as CryptoKey;

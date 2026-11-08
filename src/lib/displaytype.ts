@@ -9,11 +9,16 @@ import { ref } from 'lit/directives/ref.js';
 import { getType, sizeOrLength } from '#lib/datatypes';
 import { compactedFrom } from '#lib/datatype-attributes';
 import env from '#lib/environment';
+import { isLMTOffset } from './format-date';
+import { realNumbersNames, specialNumbers } from './special-numbers';
 import { type AllowedType, formatterOptions, ValueFormatter } from '#lib/value-formatter';
+import { ColumnFormat } from '#types/column';
 
 type DisplayOptions = {
-    format: string;
+    format: ColumnFormat;
     previewSize: number;
+    escapeNonAscii: boolean;
+    useLocalTimezone: boolean;
 };
 
 const stringFormatter = new ValueFormatter('string');
@@ -25,42 +30,53 @@ const display = (val: unknown, type: AllowedType, options: DisplayOptions) => {
             return res;
         }
     }
-    if (typeof val === 'string' && val.length === 0) {
-        return html`
-            <span class="italic" title="empty string">""</span>
-        `;
+
+    const renderOptions = getRenderOptions(type, val, options);
+    const renderedValue = stringFormatter.render(val, type, renderOptions);
+    if (typeof val === 'string') {
+        if (val.length === 0) {
+            return html`
+                <span class="italic" title="empty string">""</span>
+            `;
+        } else {
+            return html`
+                <span title="String({ length: ${val.length})">${renderedValue}</span>
+            `;
+        }
     }
     if (type in valueTitle) {
-        return html`
-            <span class="italic" title="${valueTitle[type](val)}">
-                ${stringFormatter.render(val, type)}
-            </span>
-        `;
+        const title = valueTitle[type](val, renderedValue, options);
+        return title
+            ? html`
+                  <span class="italic" title="${title}">${renderedValue}</span>
+              `
+            : renderedValue;
     }
-    const result = stringFormatter.render(val, type, displayOptions(type, val));
-    return typeof val === 'string'
-        ? html`
-              <span title="String({ length: ${val.length})">${result}</span>
-          `
-        : result;
+    return renderedValue;
 };
 
-function displayOptions(type: AllowedType, val: unknown) {
-    const options = formatterOptions({
+function getRenderOptions(type: AllowedType, val: unknown, options: DisplayOptions) {
+    const { escapeNonAscii, useLocalTimezone } = options;
+    const renderOptions = formatterOptions({
         escapeNonCharacters: true,
-        unescapedLineFeeds: false,
+        escapeNonAscii,
+        escapeCr: true,
+        escapeLf: true,
+        useLocalTimezone,
     });
     if (type === 'string') {
-        options.trimLength = 500;
-    } else if ((sizeOrLength(val) || Infinity) >= compactedFrom(type)) {
-        options.expanded = false;
+        return { ...renderOptions, trimLength: 500 };
     }
-    return options;
+    const size = sizeOrLength(val);
+    if (typeof size === 'number' && size >= compactedFrom(type)) {
+        renderOptions.compacted = true;
+    }
+    return renderOptions;
 }
 
-const typesDisplayableAs: { [key: string]: string[] } = {
+const typesDisplayableAs: { [key: string]: ColumnFormat[] } = {
     string: ['url'],
-    number: ['date'],
+    number: ['date', 'date/1000'],
     blob: ['image'],
     file: ['image'],
     imagedata: ['image'],
@@ -90,24 +106,30 @@ const displayAs = (val: unknown, type: AllowedType, options: DisplayOptions) => 
             `;
         }
     }
-    if (format === 'date' && typeof val === 'number' && Number.isInteger(val)) {
-        let str = '';
-        if (inMicroRange(val)) {
-            str = `${new Date(val).toISOString()}`;
-        } else if (inSecondsRange(val)) {
-            str = `${new Date(val * 1000).toISOString()}`;
-            str = `${str.slice(0, -5)}Z`;
-        }
-        if (str.length > 0) {
-            return html`
-                <span
-                    class="italic"
-                    title="number value ${val} formated as ISO 8601 date"
-                >
-                    ${str}
-                </span>
-            `;
-        }
+    if (
+        (format === 'date' || format === 'date/1000') &&
+        typeof val === 'number' &&
+        Number.isInteger(val) &&
+        ((format === 'date' && Math.abs(val) <= 8.64e15) || // ±100000000 days from epoch
+            (format === 'date/1000' && Math.abs(val) <= 8.64e12))
+    ) {
+        const date = new Date(format === 'date' ? val : val * 1000);
+        const str = stringFormatter.render(
+            date,
+            'date',
+            getRenderOptions(type, val, options),
+        );
+        return html`
+            <span
+                class="italic"
+                title="number value ${val} formatted as ${dateValueTitle(
+                    date,
+                    options.useLocalTimezone,
+                )}"
+            >
+                ${str}
+            </span>
+        `;
     }
     if (format === 'image') {
         if (
@@ -122,7 +144,7 @@ const displayAs = (val: unknown, type: AllowedType, options: DisplayOptions) => 
             `;
             return imagePreviewBox(content, title, alt, previewSize);
         } else if (val instanceof ImageData) {
-            const title = stringFormatter.render(val, type, { expanded: false });
+            const title = stringFormatter.render(val, type, { compacted: true });
             const alt = `image preview of an ImageData value`;
             const content = html`
                 <img
@@ -212,28 +234,6 @@ const webAdressTwoLabelsRegExp =
 const webAdressOneLabelRegExp =
     /^[a-z0-9]([a-z0-9-]{1,62})\.[a-z0-9]([a-z0-9-]{1,12})\/(([a-z0-9-._~:/?#[\]@!$&'()*+,;=]*)?)$/i;
 
-interface DateRange {
-    from: number;
-    to: number;
-}
-
-const date = new Date();
-
-const dateMicroRange: DateRange = {
-    from: date.setFullYear(date.getFullYear() - 30),
-    to: date.setFullYear(date.getFullYear() + 50),
-};
-const dateSecondsRange: DateRange = {
-    from: Math.floor(dateMicroRange.from / 1000),
-    to: Math.floor(dateMicroRange.to / 1000),
-};
-
-const inMicroRange = (val: number) =>
-    val > dateMicroRange.from && val < dateMicroRange.to;
-
-const inSecondsRange = (val: number) =>
-    val > dateSecondsRange.from && val < dateSecondsRange.to;
-
 const imageMimeTypes = [
     'image/jpeg',
     'image/png',
@@ -248,7 +248,20 @@ const imageMimeTypes = [
     'image/apng',
 ];
 
-const valueTitle: Record<string, (val: unknown) => string> = {
+const valueTitle: Record<
+    string,
+    (val: unknown, renderedVal?: string, options?: DisplayOptions) => string
+> = {
+    date: (val, _renderedVal, options) => {
+        if (!(val instanceof Date)) return '';
+        return dateValueTitle(val, Boolean(options?.useLocalTimezone));
+    },
+    number: (_val, renderedVal) => {
+        if (renderedVal && realNumbersNames.has(renderedVal)) {
+            return String(specialNumbers.get(renderedVal));
+        }
+        return '';
+    },
     cryptokey: (val) => {
         if (!(val instanceof CryptoKey)) return '';
         return (['type', 'usages', 'algorithm', 'extractable'] as const)
@@ -263,5 +276,13 @@ if (env.manifestVersion === 2) {
     // firefox can't access the properties if the CryptoKey originates from the database.
     delete valueTitle.cryptokey;
 }
+
+const dateValueTitle = (date: Date, useLocalTimezone: boolean) => {
+    return useLocalTimezone
+        ? isLMTOffset(date, env.timeZone)
+            ? `LMT date for timezone ${env.timeZone}`
+            : `local date for timezone ${env.timeZone}`
+        : 'UTC date';
+};
 
 export default display;

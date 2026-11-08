@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import applicationDefaultsOptions from '#components/config/application-defaults';
+import { applicationDefaultOptions } from '#components/config/application-defaults';
 import { globalTarget } from '#lib/app-target';
 import { getType } from './datatypes';
 import { defaultAppWindowSize } from '#lib/default-sizes';
@@ -62,7 +62,7 @@ const Settings = class {
                 top: '',
                 ...defaultAppWindowSize(),
             },
-            ...applicationDefaultsOptions(),
+            ...applicationDefaultOptions(),
         };
     }
     #handleMessages(msg: Message) {

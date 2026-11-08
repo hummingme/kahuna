@@ -3,22 +3,21 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { valueControlsTextareaView } from '#components/value-editor/view-utils';
 import Field from '#components/value-editor/fields/field';
 import { isLargeValue } from '#components/value-editor/checkings';
 import { stringToArrayOfBigInt } from '#components/value-editor/converter';
-import type { RequiredVariables } from '#components/js-codearea';
 import CsvReader from '#lib/csvreader';
 import { getType, hasValuesIterator, isArrayBuffer } from '#lib/datatypes';
 import { inputMethods, isLarge, itemsPerLine } from '#lib/datatype-attributes';
 import { formattedNumericArray, formatterOptions } from '#lib/value-formatter';
+import { RequiredVariables } from '#types';
 
 type TypedBigArrayFieldTypes = BigInt64Array | BigUint64Array;
 
-interface TypedBigArrayConstructor<T extends TypedBigArrayFieldTypes> {
+type TypedBigArrayConstructor<T extends TypedBigArrayFieldTypes> = {
     new (buffer: ArrayBuffer, byteOffset?: number, length?: number): T;
     readonly BYTES_PER_ELEMENT: number;
-}
+};
 
 export default abstract class TypedBigArrayField extends Field {
     override async init(requireVariables: () => RequiredVariables) {
@@ -33,8 +32,9 @@ export default abstract class TypedBigArrayField extends Field {
             this.inputMethod = 'code';
         }
     }
-    view() {
-        return valueControlsTextareaView(this);
+    formView() {
+        const value = this.toFormValue() || '';
+        return this.flexInput ? this.flexInput.view(value) : '';
     }
     abstract override get value(): TypedBigArrayFieldTypes;
     abstract override set value(value: unknown);
@@ -67,27 +67,27 @@ export default abstract class TypedBigArrayField extends Field {
         const value = this.value;
         const perLine = itemsPerLine(this.state.type);
         const options = formatterOptions({ perLine });
-        return this.state.inputMethod === 'form' && options.expanded
-            ? formattedNumericArray(value, 'array', options)
-            : this.stringFormatter.render(value, getType(value), options);
+        return this.state.inputMethod === 'form' && options.compacted
+            ? this.stringFormatter.render(value, getType(value), options)
+            : formattedNumericArray(value, 'array', options);
     }
-    invalidTextareaHint =
-        'The form value must be a list of integer numbers separated by commas, semicolons, or bars ( , ; | ) !';
-    validateTextareaValue(value: string) {
+    validate(value: string) {
         return (
             value.trim().length === 0 ||
             stringToArrayOfBigInt(value).length > 0 ||
             value.replaceAll(' ', '') === '[]'
         );
     }
+    override invalidHint =
+        'The form value must be a list of integer numbers separated by commas, semicolons, or bars ( , ; | ) !';
     override async handleUploadedValue(file: File) {
-        if (!this.textarea || !this.codearea) return;
         const csv = new CsvReader();
         await csv.init(file);
         const data = csv.getData();
         const value = data.length === 1 ? data[0] : data.map((row: unknown[]) => row[0]);
-        this.state.formOptions.expanded = this.state.codeOptions.expanded =
-            value.length < isLarge(this.state.type);
+        const compacted = value.length >= isLarge(this.state.type);
+        this.formatterMgr.setOptions('form', { compacted });
+        this.formatterMgr.setOptions('code', { compacted });
         this.update(value);
     }
 }

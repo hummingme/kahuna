@@ -3,23 +3,23 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import ApplicationConfigDefaults from '#components/config/application-defaults';
+import { applicationDefaultOptions } from '#components/config/application-defaults';
 import { pickProperties } from '#lib/utils';
 import ContentscriptMessenger from '#lib/contentscript-messenger';
 import { Message, UnknownRecord } from '#types';
 
-export interface ContentScriptType {
+export type ContentScriptType = {
     handleGlobalSettings: (msg: Message) => void;
     searchDatabases: () => void;
-}
+};
 
-interface ContentScriptState extends ContentScriptSettings {
+type ContentScriptState = ContentScriptSettings & {
     foundDBs: string[];
-}
-interface ContentScriptSettings {
+};
+type ContentScriptSettings = {
     dontNotifyEmpty: boolean;
     ignoreDatabases: string[];
-}
+};
 
 const state = Symbol('contentscript state');
 
@@ -41,7 +41,7 @@ const ContentScript = class {
         this.#messenger.post({ type: 'kahunaAlive' });
     }
     defaultSettings(): ContentScriptSettings {
-        return pickProperties(ApplicationConfigDefaults(), [
+        return pickProperties(applicationDefaultOptions(), [
             'dontNotifyEmpty',
             'ignoreDatabases',
         ]) as ContentScriptSettings;

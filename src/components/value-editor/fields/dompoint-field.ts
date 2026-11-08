@@ -3,8 +3,6 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
-
 import Field from '#components/value-editor/fields/field';
 import {
     isArgsNumbersArray,
@@ -15,21 +13,8 @@ import { validateDOMPoint } from '#components/value-editor/validations';
 import { requiredArgumentsList } from '#lib/value-formatter';
 
 export default class DompointField extends Field {
-    view() {
-        return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(
-                        this,
-                        {
-                            id: 'dompoint-coordinates',
-                        },
-                        true,
-                    )}
-                </div>
-                ${this.inputMethodView()}
-            </div>
-        `;
+    formView() {
+        return textInput(this, { classes: ['resizable'] }, true);
     }
     get value(): DOMPoint {
         return this.state.value as DOMPoint;
@@ -67,8 +52,8 @@ export default class DompointField extends Field {
     }
     argsFromField() {
         let args: number[] = [];
-        if (this.node.value instanceof HTMLInputElement) {
-            const value = this.node.value.value;
+        if (this.nodeInput instanceof HTMLInputElement) {
+            const value = this.nodeInput.value;
             if (isArgsNumbersList(value, 4)) {
                 args = value.split(',').map((arg) => Number(arg));
             }
@@ -77,7 +62,7 @@ export default class DompointField extends Field {
     }
     validate() {
         const name = this.value instanceof DOMPoint ? 'DOMPoint' : 'DOMPointReadonly';
-        this.valid = validateDOMPoint(this.node.value, name);
+        this.valid = validateDOMPoint(this.nodeInput, name);
     }
     hints = {
         form: `The valid form input for a DOMPoint value is a

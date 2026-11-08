@@ -5,11 +5,15 @@
 
 import type { AppTarget, UnknownRecord } from '#types/common';
 import { InjectedExportArgs, InjectedImportArgs } from '#types/import-export';
-import type { QueryDataArgs } from '#types/querydata';
-import type { SettingKey, SettingObject, SettingValues } from '#types/settings';
+import { JsCodeareaUser } from '#types/js-codearea';
+import { QueryDataArgs } from '#types/querydata';
+import { SettingKey, SettingObject, SettingValues, WidthObject } from '#types/settings';
 
 export type Message =
-    | { type: 'checkFlawsResult'; result: { BigInt64Array: [] } }
+    | {
+          type: 'checkFlawsResult';
+          result: { BigInt64Array: []; unsafeEvalWorker: boolean };
+      }
     | { type: 'codeError'; error: Error }
     | ({ type: 'codeExecuted' } & CodeExecutedProperties)
     | { type: 'databaseDropped'; target: AppTarget }
@@ -35,7 +39,9 @@ export type Message =
     | { type: 'requestSettings'; key: SettingKey; id: string }
     | { type: 'resetSettings'; target: AppTarget }
     | { type: 'saveSettings'; data: SettingObject }
+    | { type: 'saveTextinputWidth'; width: WidthObject }
     | { type: 'tableDropped'; target: AppTarget }
+    | { type: 'textinputWidthsResults'; widths: { [key: string]: number } }
     | SimpleMessage;
 
 // messages that contain no payload other than the type field
@@ -55,6 +61,7 @@ type SimpleMessageType =
     | 'refreshMessagestack'
     | 'reloadApp'
     | 'reloadOrigin'
+    | 'requestTextinputWidths'
     | 'rerenderApp';
 
 type MessageType = Message['type'];
@@ -68,7 +75,7 @@ export type QueryResultMessagePayload = {
 export type ExecuteCodePayload = {
     code: string;
     target: AppTarget;
-    client: 'datatable' | 'valueEditorField';
+    user: JsCodeareaUser;
     encodeResult: boolean;
     selectorFields: string[];
     selected: Set<string | number>;
@@ -76,7 +83,7 @@ export type ExecuteCodePayload = {
     value?: unknown;
 };
 type CodeExecutedProperties = {
-    client: 'datatable' | 'valueEditorField';
+    user: JsCodeareaUser;
     result: unknown;
 };
 
@@ -102,8 +109,10 @@ export const MESSAGE_TOPICS = {
         'importSettings',
         'injectExportImport',
         'requestSettings',
+        'requestTextinputWidths',
         'resetSettings',
         'saveSettings',
+        'saveTextinputWidth',
         'tableDropped',
         'databaseDropped',
     ],
@@ -112,6 +121,7 @@ export const MESSAGE_TOPICS = {
         'importSettingsResult',
         'getPermissionsResult',
         'obtainSettings',
+        'textinputWidthsResults',
         'toggleVisibility',
     ],
     toWorker: ['checkFlaws', 'executeCode', 'queryData'],

@@ -9,21 +9,17 @@ import Config from '#components/config/config';
 import {
     columnsDefaultOptions,
     columnsDefaultOrder,
-} from '#components/config/columns-default';
-import type { ControlInstance, ColumnsOptions } from '#components/config/types';
+    type ColumnsOptions,
+} from '#components/config/columns-defaults';
+import type { ControlInstance } from '#components/config/types';
 import datatable from '#components/datatable';
-import checkbox from '#lib/checkbox';
-import {
-    buildColumn,
-    type Column,
-    columnFormatOptions,
-    isColumnFormat,
-} from '#lib/column';
+import checkbox from '#components/parts/checkbox';
+import { selectbox } from '#components/parts/selectbox';
+import { buildColumn, columnFormatOptions, isColumnFormat } from '#lib/column';
 import { isPrimKeyCompound, isPrimKeyUnnamed } from '#lib/dexie-utils';
-import { selectbox } from '#lib/selectbox';
 import settings from '#lib/settings';
 import { pickProperties, rowIndex } from '#lib/utils';
-import type { AppTarget, Direction, SettingSubject } from '#types';
+import type { AppTarget, Column, Direction, SettingSubject } from '#types';
 
 type ColumnsConfigState = {
     defaults: ColumnsOptions;
@@ -74,7 +70,7 @@ export default class ColumnsConfig extends Config {
             name: 'previewSize',
             label: 'image preview width and height in pixels',
             type: 'number',
-            size: 3,
+            style: 'width: 5ch;',
             maxlength: 3,
             '?required': true,
             min: 10,

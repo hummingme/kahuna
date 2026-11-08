@@ -3,30 +3,14 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
-
 import Field from '#components/value-editor/fields/field';
 import { isNumbersArray } from '#components/value-editor/checkings';
 import textInput from '#components/value-editor/text-input';
 import { dommatrixArgsList } from '#lib/value-formatter';
 
 export default class DommatrixreadonlyField extends Field {
-    view() {
-        return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(
-                        this,
-                        {
-                            id: 'dommatrix-args',
-                            size: 25,
-                        },
-                        true,
-                    )}
-                </div>
-                ${this.inputMethodView()}
-            </div>
-        `;
+    formView() {
+        return textInput(this, { style: 'width: 20ch;', classes: ['resizable'] }, true);
     }
     get value(): DOMMatrixReadOnly {
         return this.state.value as DOMMatrixReadOnly;
@@ -62,8 +46,8 @@ export default class DommatrixreadonlyField extends Field {
     }
     argFromField() {
         let arg: number[] | undefined;
-        if (this.node.value instanceof HTMLInputElement) {
-            const value = this.node.value.value.trim();
+        if (this.nodeInput instanceof HTMLInputElement) {
+            const value = this.nodeInput.value.trim();
             const argArray = value.split(',').map((arg) => Number(arg));
             if (this.isSuitableArg(argArray)) {
                 arg = argArray;
@@ -72,7 +56,7 @@ export default class DommatrixreadonlyField extends Field {
         return arg;
     }
     validate() {
-        const input = this.node.value;
+        const input = this.nodeInput;
         if (input instanceof HTMLInputElement) {
             const parts = input.value.split(',');
             this.valid =

@@ -4,7 +4,8 @@
  */
 
 import { UnknownRecord } from '#types';
-import { escapeLF } from './escape-unicode';
+import { escapeLF } from '#lib/escape-string';
+import { isIdentifierName } from '#lib/identifier-name';
 import type { AllowedType } from '#lib/value-formatter';
 
 /**
@@ -43,12 +44,9 @@ export const compareIndexValues = (a: never, b: never): boolean => {
     return false;
 };
 
-const unquotedStringProperties = /^[_$a-zA-Z\xA0-\uFFFF][_$a-zA-Z0-9\xA0-\uFFFF]*$/u;
-
 export const maybeQuotedProperty = (prop: string | number) => {
     return (typeof prop === 'number' && isNaN(prop) === false) ||
-        (typeof prop === 'string' &&
-            (isArrayIndex(prop) || unquotedStringProperties.test(prop)))
+        (typeof prop === 'string' && (isArrayIndex(prop) || isIdentifierName(prop)))
         ? prop
         : quotedProperty(escapeLF(String(prop)));
 };
@@ -67,9 +65,6 @@ const quotedProperty = (val: string, doubleQuotes?: boolean) => {
 
 const isArrayIndex = (val: string) =>
     String(Number(val)) === val && Number.isInteger(Number(val)) && Number(val) >= 0;
-
-export const isUnquotedPropertyName = (name: string) =>
-    unquotedStringProperties.test(name);
 
 export const typedarrayTypes = [
     'int8array',
@@ -224,6 +219,12 @@ export function hasValuesIterator(
 export function sizeOrLength(value: unknown): number | undefined {
     if (typeof value === 'string') {
         return value.length;
+    }
+    if (value instanceof DataView) {
+        return value.buffer.byteLength;
+    }
+    if (isPlainObject(value)) {
+        return Object.entries(value).length;
     }
     if (
         typeof value === 'object' &&

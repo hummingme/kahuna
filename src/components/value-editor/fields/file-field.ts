@@ -11,15 +11,15 @@ import { isBlobPart, isFileBits } from '#components/value-editor/checkings';
 import saveFileIcon from '#components/value-editor/save-file-icon';
 import textInput from '#components/value-editor/text-input';
 import { validateASCII } from '#components/value-editor/validations';
-import type { RequiredVariables } from '#components/js-codearea';
 import { isLarge } from '#lib/datatype-attributes';
 import { isFileLike } from '#lib/datatypes';
-import { escapeUnicode, unescapeUnicode } from '#lib/escape-unicode';
+import { escapeUnicode, unescapeString } from '#lib/escape-string';
 import {
     formattedNumericArray,
     type FormatterOptions,
     formatterOptions,
 } from '#lib/value-formatter';
+import { RequiredVariables } from '#types';
 
 export default class FileField extends Field {
     nodeFileName: Ref<HTMLInputElement> = createRef();
@@ -31,36 +31,33 @@ export default class FileField extends Field {
         this.buffer = await this.value.arrayBuffer();
         this.codearea?.updateCode();
     }
-    view() {
+    formView() {
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    <div class="form-wrapper">
-                        <div>
-                            ${textInput(this, {
-                                id: 'filename',
-                                '.value': escapeUnicode(this.value.name),
-                                size: 20,
-                                label: 'name',
-                                refVar: this.nodeFileName,
-                            })}
-                            ${textInput(this, {
-                                id: 'filetype',
-                                '.value': this.value.type,
-                                size: 15,
-                                maxLength: 100,
-                                label: 'type',
-                                refVar: this.nodeFileType,
-                            })}
-                        </div>
-                        <div
-                            class="value-icons"
-                            ${ref(this.nodeSaveIcon)}
-                            ${ref(this.renderSaveIcon.bind(this))}
-                        ></div>
-                    </div>
+            <div class="form-wrapper">
+                <div>
+                    ${textInput(this, {
+                        id: this.valueInputId('name'),
+                        '.value': escapeUnicode(this.value.name),
+                        style: 'width: 15ch;',
+                        classes: ['resizable'],
+                        label: 'name',
+                        refVar: this.nodeFileName,
+                    })}
+                    ${textInput(this, {
+                        id: this.valueInputId('type'),
+                        '.value': this.value.type,
+                        style: 'width: 10ch;',
+                        classes: ['resizable'],
+                        maxLength: 100,
+                        label: 'type',
+                        refVar: this.nodeFileType,
+                    })}
                 </div>
-                ${this.inputMethodView()}
+                <div
+                    class="value-icons"
+                    ${ref(this.nodeSaveIcon)}
+                    ${ref(this.renderSaveIcon.bind(this))}
+                ></div>
             </div>
         `;
     }
@@ -79,7 +76,9 @@ export default class FileField extends Field {
         } else if (isFileBits(value)) {
             result = new File(value, '');
         } else if (isBlobPart(value)) {
-            result = new File([value], '');
+            const mimeType = (value as Blob).type;
+            const options = typeof mimeType === 'string' ? { type: mimeType } : {};
+            result = new File([value], '', options);
         }
         this.state.value = result;
     }
@@ -99,7 +98,7 @@ export default class FileField extends Field {
             this.nodeFileType.value instanceof HTMLInputElement
         ) {
             let file = this.value;
-            const fileName = unescapeUnicode(this.nodeFileName.value.value.trim());
+            const fileName = unescapeString(this.nodeFileName.value.value.trim());
             const fileType = this.nodeFileType.value.value.trim();
             if (fileName !== this.value.name || fileType !== this.value.type) {
                 file = new File([this.buffer], fileName, { type: fileType });
@@ -138,19 +137,23 @@ export default class FileField extends Field {
         }
         this.update(file);
     }
-    override toSourceValue(expanded: boolean): string {
-        if (!expanded) return 'return value;';
+    override toSourceValue(compacted: boolean): string {
+        if (compacted) return 'return value;';
         const { name, type, lastModified } = this.value;
-        const option_str = type
-            ? `, {type:'${type}', lastModified: ${lastModified}}`
-            : '';
-        const options = this.formOptions({ expanded });
+        const formattedName = this.sourceFormatter.render(
+            name,
+            'string',
+            this.codeOptions(),
+        );
+        const typeOptionStr = type ? `type: '${type}', ` : '';
+        const option_str = `, {${typeOptionStr}lastModified: ${lastModified}}`;
+        const options = this.formOptions({ compacted });
         const arr = formattedNumericArray(
             new Uint8Array(this.buffer),
             'uint8array',
             formatterOptions(options),
         );
-        return `return new File([buffer()], "${name}"${option_str});
+        return `return new File([buffer()], ${formattedName} ${option_str});
             
 function buffer() {
     const buffer = new ArrayBuffer(${this.buffer.byteLength});
@@ -161,10 +164,10 @@ function buffer() {
     isLarge() {
         return this.value.size > isLarge(this.state.type);
     }
-    override defaultValueOptions(): FormatterOptions {
-        return {
-            ...super.defaultValueOptions(),
-            offset: 4,
-        };
+    override defaultOptionsOverrides: Partial<FormatterOptions> = {
+        offset: 4,
+    };
+    override focus(): void {
+        super.focus(this.nodeFileName.value);
     }
 }

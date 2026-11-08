@@ -5,15 +5,19 @@
 
 import type { Direction } from '#types';
 
-export const columnsDefaultOptions = () => {
-    const defaultOptions: {
-        displayDiscoveredColumns: boolean;
-        previewSize: number;
-    } = {
+export type ColumnsOptions = {
+    displayDiscoveredColumns: boolean;
+    previewSize: number;
+    order: string;
+    direction: Direction;
+};
+
+export const columnsDefaultOptions = (): ColumnsOptions => {
+    return {
         displayDiscoveredColumns: true,
         previewSize: 30,
+        ...columnsDefaultOrder(),
     };
-    return { ...defaultOptions, ...columnsDefaultOrder() };
 };
 
 export const columnsDefaultOrder = (): { order: string; direction: Direction } => {

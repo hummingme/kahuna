@@ -9,25 +9,18 @@ import Field from '#components/value-editor/fields/field';
 import textInput from '#components/value-editor/text-input';
 
 export default class RtccertificateField extends Field {
-    view() {
-        const formView =
-            this.value instanceof RTCCertificate
-                ? html`
-                      ${textInput(this, {
-                          id: 'rtccert-expires',
-                          '.value': new Date(this.value.expires).toISOString(),
-                          label: 'expires',
-                          disabled: true,
-                      })}
-                      ${this.fingerprintsTable()}
-                  `
-                : '-';
-        return html`
-            <div class="value-controls">
-                <div class="value">${formView}</div>
-                ${this.inputMethodView()}
-            </div>
-        `;
+    formView() {
+        return this.value instanceof RTCCertificate
+            ? html`
+                  ${textInput(this, {
+                      id: 'rtccert-expires',
+                      '.value': new Date(this.value.expires).toISOString(),
+                      label: 'expires',
+                      disabled: true,
+                  })}
+                  ${this.fingerprintsTable()}
+              `
+            : '-';
     }
     fingerprintsTable() {
         const fingerprints = this.value.getFingerprints();

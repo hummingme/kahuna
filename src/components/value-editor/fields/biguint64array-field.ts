@@ -9,6 +9,7 @@ import {
     stringToArrayOfBigInt,
 } from '#components/value-editor/converter';
 import { bigint64arrayFormHint, typedarrayCsvHint } from '#components/value-editor/hints';
+import { isFlexInputNode } from '#components/value-editor/flex-input';
 
 export default class Biguint64arrayField extends TypedBigArrayField {
     typeConstructor = () => BigUint64Array;
@@ -20,9 +21,9 @@ export default class Biguint64arrayField extends TypedBigArrayField {
         this.state.value = arrayToBigUint64Array(values);
     }
     fromFormValue(): BigUint64Array | undefined {
-        const textarea = this.node.value;
-        if (textarea instanceof HTMLTextAreaElement) {
-            return arrayToBigUint64Array(stringToArrayOfBigInt(textarea.value));
+        const node = this.nodeInput;
+        if (isFlexInputNode(node)) {
+            return arrayToBigUint64Array(stringToArrayOfBigInt(node.value));
         }
     }
     hints = {

@@ -9,13 +9,10 @@ import {
     maybeQuotedProperty,
     type TypedArrayType,
 } from '#lib/datatypes';
-import {
-    escapeCR,
-    escapeLF,
-    escapeUnicode,
-    escapeUnicodeForJson,
-} from '#lib/escape-unicode';
+import { escapeJsonString, escapeByOptions } from '#lib/escape-string';
+import { formatLocalDatetime, formatUTCDatetime } from '#lib/format-date';
 import quotedString from '#lib/quoted-string';
+import { specialNumbersNames } from './special-numbers';
 import type { UnknownRecord } from '#types';
 
 type ValueFormatterMethodNames = {
@@ -29,26 +26,34 @@ type ToStringType = Exclude<ValueFormatterMethodNames, 'render'>;
 export type AllowedType = TypedArrayType | ToStringType | 'arraybuffer';
 
 export type FormatterOptions = {
-    expanded: boolean;
+    compacted: boolean;
     perLine: number;
     ident: number;
     offset: number;
     valign: boolean;
+    escapeNonAscii: boolean;
     escapeNonCharacters: boolean;
-    unescapedLineFeeds: boolean;
+    escapeLf: boolean;
+    escapeCr: boolean;
+    escapeBackslash: boolean;
     escapeForJson: boolean;
+    useLocalTimezone: boolean;
     trimLength: number;
 };
 
 const defaultFormatterOptions: FormatterOptions = {
-    expanded: true,
+    compacted: false,
     perLine: Infinity,
     ident: 2,
     offset: 0,
     valign: true,
-    escapeNonCharacters: false,
-    unescapedLineFeeds: true,
+    escapeNonAscii: false,
+    escapeNonCharacters: true,
+    escapeLf: false,
+    escapeCr: true,
+    escapeBackslash: true,
     escapeForJson: false,
+    useLocalTimezone: true,
     trimLength: 0,
 } as const;
 
@@ -116,7 +121,11 @@ export class ValueFormatter {
         options: FormatterOptions = defaultFormatterOptions,
     ) {
         if (typeof value === 'string') {
-            return this.#valueToString(quotedString(value), type, options);
+            return this.#valueToString(
+                quotedString(value, !options.escapeBackslash),
+                type,
+                options,
+            );
         } else if (isTypedArrayType(type)) {
             return `new ${this.#valueToString(value, type, options)}`;
         } else if (['date', 'set', 'map'].includes(type) || type.startsWith('dom')) {
@@ -130,54 +139,43 @@ export class ValueFormatter {
     ) {
         const type = getType(val);
         if (typeof val === 'string') {
-            let str = val;
-            const { escapeForJson, escapeNonCharacters, unescapedLineFeeds } = options;
+            const str = val;
+            const { escapeNonAscii, escapeNonCharacters, escapeForJson } = options;
             if (escapeForJson) {
-                return `"${escapeUnicodeForJson(str, escapeNonCharacters)}"`;
+                return `"${escapeJsonString(str, escapeNonCharacters, escapeNonAscii)}"`;
             }
-            if (this.#purpose === 'source' && !escapeNonCharacters) {
-                str = str.replaceAll('\\', '\\\\') as string;
-            }
-            if (escapeNonCharacters) {
-                return escapeUnicode(quotedString(str), unescapedLineFeeds);
-            } else {
-                if (unescapedLineFeeds === false) {
-                    return escapeCR(escapeLF(quotedString(str)));
-                } else {
-                    return escapeCR(quotedString(str));
-                }
-            }
+            const quotedStr = quotedString(str, !options.escapeBackslash);
+            return escapeByOptions(quotedStr, options);
         } else {
             return this.#purpose === 'string'
                 ? this.#valueToString(val, type, options)
                 : this.#valueToSource(val, type, options);
         }
     }
-    string(val: string, options: FormatterOptions) {
+    string(str: string, options: FormatterOptions) {
         const {
-            expanded,
+            compacted,
             trimLength,
             escapeForJson,
+            escapeNonAscii,
             escapeNonCharacters,
-            unescapedLineFeeds,
         } = options;
-        if (expanded === false) {
-            return `String({ length: ${val.length} })`;
+        if (compacted) {
+            return `String({ length: ${str.length} })`;
         }
         if (escapeForJson) {
-            val = escapeUnicodeForJson(val, escapeNonCharacters);
-        } else if (escapeNonCharacters) {
-            val = escapeUnicode(val, unescapedLineFeeds);
+            str = escapeJsonString(str, escapeNonCharacters, escapeNonAscii);
         } else {
-            val = escapeCR(val);
-            if (unescapedLineFeeds === false) {
-                val = escapeLF(val);
-            }
+            str = escapeByOptions(str, options);
         }
-        const trimmed = trimLength > 0 && val.length > trimLength;
-        return trimmed ? `${val.substring(0, trimLength)}…` : val;
+        const trimmed = trimLength > 0 && str.length > trimLength;
+        return trimmed ? `${str.substring(0, trimLength)}…` : str;
     }
     number(val: number) {
+        const name = specialNumbersNames.get(val);
+        if (typeof name === 'string') {
+            return name;
+        }
         return val.toString();
     }
     boolean(val: boolean) {
@@ -193,7 +191,7 @@ export class ValueFormatter {
         return 'null';
     }
     array(val: unknown[], options: FormatterOptions) {
-        if (options.expanded === false) {
+        if (options.compacted) {
             return `Array(${val.length})`;
         }
         if (val.length > 0 && Object.keys(val).length === 0) {
@@ -215,18 +213,27 @@ export class ValueFormatter {
         }
     }
     object(val: UnknownRecord, options: FormatterOptions = defaultFormatterOptions) {
+        if (options.compacted) {
+            return `Object({ ${Object.entries(val).length} entries } })`;
+        }
         const parts: string[] = [];
         const entries = Object.entries(val);
+        const { escapeForJson, escapeNonAscii, escapeNonCharacters } = options;
         entries.forEach((entry) => {
-            const property = options.escapeForJson
-                ? `"${escapeUnicodeForJson(entry[0], options.escapeNonCharacters)}"`
-                : maybeQuotedProperty(entry[0]);
+            const property = escapeForJson
+                ? `"${escapeJsonString(entry[0], escapeNonCharacters, escapeNonAscii)}"`
+                : maybeQuotedProperty(escapeByOptions(entry[0], options));
             parts.push(`${property}: ${this.#quotedStringOrValue(entry[1], options)}`);
         });
         return `{${parts.join(', ')}}`;
     }
-    date(val: Date) {
-        return val?.toISOString && `Date('${val.toISOString()}')`;
+    date(val: Date, options: FormatterOptions) {
+        const { useLocalTimezone } = options;
+        if (options.useLocalTimezone) {
+            const abbreviate = this.#purpose !== 'source' || !useLocalTimezone;
+            return formatLocalDatetime(val, abbreviate);
+        }
+        return formatUTCDatetime(val);
     }
     arraybuffer(
         val: ArrayBufferLike,
@@ -236,10 +243,9 @@ export class ValueFormatter {
             val.maxByteLength !== val.byteLength
                 ? `, {maxByteLength:${val.maxByteLength}}`
                 : '';
-        const contentEnd =
-            options.expanded === false && val.byteLength > 3 ? 3 : val.byteLength;
+        const contentEnd = options.compacted && val.byteLength > 3 ? 3 : val.byteLength;
         const contentView = new Uint8Array(val).subarray(0, contentEnd);
-        const dots = options.expanded === false && val.byteLength > 3 ? ',...' : '';
+        const dots = options.compacted && val.byteLength > 3 ? ',...' : '';
         const content = `[${contentView.toString()}${dots}]`;
 
         return `ArrayBuffer(${val.byteLength}${option_str})${content}`;
@@ -253,7 +259,7 @@ export class ValueFormatter {
         return `DataView(${buffer}${param_str})`;
     }
     set(val: Set<unknown>, options: FormatterOptions) {
-        if (options.expanded === false) {
+        if (options.compacted) {
             return `Set({ size: ${val.size} })`;
         }
         const parts: string[] = [];
@@ -261,7 +267,7 @@ export class ValueFormatter {
         return `Set([${formattedMultilineArray(parts, 'array', options)}])`;
     }
     map(val: Map<unknown, unknown>, options: FormatterOptions) {
-        if (options.expanded === false) {
+        if (options.compacted) {
             return `Map({ size: ${val.size} })`;
         }
         const parts: string[] = [];
@@ -348,14 +354,18 @@ export class ValueFormatter {
     imagebitmap(val: ImageBitmap) {
         return `ImageBitmap { width: ${val.width}, height: ${val.height} }`;
     }
-    file(val: File) {
+    file(val: File, options: FormatterOptions) {
         const properties = [
-            `name: "${val.name}"`,
+            `name: ${this.#quotedStringOrValue(val.name, options)}`,
             `size: ${val.size}`,
             `lastModified: "${new Date(val.lastModified).toISOString()}"`,
         ];
         if (val.type !== '') {
-            properties.splice(1, 0, `type: "${val.type}"`);
+            properties.splice(
+                1,
+                0,
+                `type: ${this.#quotedStringOrValue(val.type, options)}`,
+            );
         }
         return `File { ${properties.join(', ')} }`;
     }
@@ -384,10 +394,10 @@ function typedArrayToString(
     options: FormatterOptions,
 ) {
     const typeName = value.constructor.name;
-    if (options.expanded) {
-        return `${typeName}(${formattedNumericArray(value, type, options)})`;
-    } else {
+    if (options.compacted) {
         return `${typeName}(${value.length})`;
+    } else {
+        return `${typeName}(${formattedNumericArray(value, type, options)})`;
     }
 }
 

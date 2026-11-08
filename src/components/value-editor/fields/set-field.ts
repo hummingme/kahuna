@@ -6,15 +6,16 @@
 import Field from '#components/value-editor/fields/field';
 import { csvFormatHint, jsonHint } from '#components/value-editor/hints';
 import { arrayToFieldValue, stringToArray } from '#components/value-editor/converter';
-import { valueControlsTextareaView } from '#components/value-editor/view-utils';
+import { isFlexInputNode } from '#components/value-editor/flex-input';
 import CsvReader from '#lib/csvreader';
 import { hasValuesIterator, isNumber } from '#lib/datatypes';
 import { decodeFromFile } from '#lib/decode-string';
 import { requiredArguments } from '#lib/value-formatter';
 
 export default class SetField extends Field {
-    view() {
-        return valueControlsTextareaView(this);
+    formView() {
+        const value = this.toFormValue() || '';
+        return this.flexInput ? this.flexInput.view(value) : '';
     }
     set value(value: unknown) {
         let result: Set<unknown> = new Set();
@@ -46,21 +47,21 @@ export default class SetField extends Field {
     }
     toFormValue(): string {
         const options = this.formOptions();
-        return this.state.inputMethod === 'form' && options.expanded
-            ? arrayToFieldValue(
+        return this.state.inputMethod === 'form' && options.compacted
+            ? this.stringFormatter.render(this.value, 'set', options)
+            : arrayToFieldValue(
                   [...this.value.values()],
                   this,
                   Object.assign(options, { escapeForJson: true }),
-              )
-            : this.stringFormatter.render(this.value, 'set', options);
+              );
     }
     fromFormValue(): Set<unknown> | undefined {
         if (this.state.inputMethod === 'form') {
-            const textarea = this.node.value;
-            if (textarea instanceof HTMLTextAreaElement) {
+            const node = this.nodeInput;
+            if (isFlexInputNode(node)) {
                 let value = new Set();
                 try {
-                    const parsed = JSON.parse(textarea.value);
+                    const parsed = JSON.parse(node.value);
                     if (Array.isArray(parsed)) {
                         value = new Set(parsed);
                     }
@@ -69,10 +70,10 @@ export default class SetField extends Field {
             }
         }
     }
-    validateTextareaValue(value: string) {
+    validate(value: string) {
         return Array.isArray(JSON.parse(value));
     }
-    invalidTextareaHint = 'The form value must be an array in json syntax!';
+    override invalidHint = 'The form value must be an array in json syntax!';
     override async handleUploadedValue(file: File) {
         const content = await decodeFromFile(file, this.state.uploadCharset);
         const csv = new CsvReader();

@@ -3,17 +3,15 @@
  * SPDX-FileCopyrightText: 2025-2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html } from 'lit-html';
-
 import configLayer from '#components/configlayer';
 import datatable from '#components/datatable';
 import messageStack from '#components/messagestack';
+import { toolEntry } from '#components/parts/tool-entry';
 import appStore from '#lib/app-store';
 import { getConnection } from '#lib/connection';
 import { isPlainObject } from '#lib/datatypes';
 import { getCollection } from '#lib/dexie-utils';
 import settings from '#lib/settings';
-import svgIcon from '#lib/svgicon';
 import { plural } from '#lib/utils';
 import type { AppTarget, SettingObject, UnknownRecord } from '#types';
 
@@ -46,27 +44,30 @@ export const checkScrubbler = async (target: AppTarget) => {
     }
 };
 
-export const scrubblerTopic = (topic: string | null, count: number, loading: boolean) => {
+export const scrubblerToolEntry = (
+    topic: string | null,
+    count: number,
+    loading: boolean,
+) => {
     const { table } = scrubblerTable();
     if (!table) return '';
 
     const s = plural(count);
     const subject = table === 'edits' ? `automatic edit${s}` : `scrobble${s}`;
-    return html`
-        <p>
-            <a @click=${configLayer.onTopicClicked} data-topic="scrubblerDelete">
-                ${svgIcon('tabler-brand-lastfm', { style: 'color: #d92323' })}
-                <label>delete last.fm ${table}</label>
-            </a>
-            ${topic == 'scrubblerDelete'
-                ? configLayer.confirmOption(
-                      `Delete ${count} `,
-                      `${subject} on last.fm?`,
-                      loading,
-                  )
-                : ''}
-        </p>
-    `;
+
+    return toolEntry({
+        label: `delete last.fm ${table}`,
+        topic: 'scrubblerDelete',
+        panelOpen: topic === 'scrubblerDelete',
+        iconName: 'tabler-brand-lastfm',
+        iconArgs: { style: 'color: #d92323' },
+        panelView: () =>
+            configLayer.confirmOption(
+                `Delete ${count}`,
+                `${subject} on last.fm?`,
+                loading,
+            ),
+    });
 };
 
 export const scrubblerDelete = async () => {
@@ -137,14 +138,14 @@ const intialSettings: Omit<SettingObject, 'database'>[] =
     "table": "edits",
     "subject": "filters",
     "values": [
-      { "field": "artist_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "track_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "album_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "album_artist_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "artist_name_original", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "track_name_original", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "album_name_original", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "album_artist_name_original", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] }
+      { "field": "artist_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false, datespan: false },
+      { "field": "track_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "album_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "album_artist_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "artist_name_original", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "track_name_original", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "album_name_original", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "album_artist_name_original", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false, datespan: false }
     ]
   },
   {
@@ -164,8 +165,8 @@ const intialSettings: Omit<SettingObject, 'database'>[] =
     "table": "jobs",
     "subject": "filters",
     "values": [
-      { "field": "job", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "equal", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "state", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "equal", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] }
+      { "field": "job", "search": "", "indexed": true, "valid": true, "method": "equal", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false, datespan: false },
+      { "field": "state", "search": "", "indexed": true, "valid": true, "method": "equal", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false, datespan: false }
     ]
   },
   {
@@ -180,8 +181,8 @@ const intialSettings: Omit<SettingObject, 'database'>[] =
     "table": "loved",
     "subject": "filters",
     "values": [
-      { "field": "artist_name", "search": "", "indexed": false, "compoundHead": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "track_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] }
+      { "field": "artist_name", "search": "", "indexed": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false, datespan: false },
+      { "field": "track_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false, datespan: false }
     ]
   },
   {
@@ -192,7 +193,7 @@ const intialSettings: Omit<SettingObject, 'database'>[] =
       { "name": "track_name", "visible": true, "width": 277, "format": "" },
       { "name": "album_name", "visible": true, "width": 338, "format": "" },
       { "name": "album_artist_name", "visible": true, "width": 168, "format": "" },
-      { "name": "timestamp", "visible": true, "width": 90, "format": "date" },
+        { "name": "timestamp", "visible": true, "width": 90, "format": "date/1000" },
       { "name": "sequence", "visible": true, "width": 81, "format": "" }
     ]
   },
@@ -200,11 +201,11 @@ const intialSettings: Omit<SettingObject, 'database'>[] =
     "table": "scrobbles",
     "subject": "filters",
     "values": [
-      { "field": "artist_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "track_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "album_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "album_artist_name", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ] },
-      { "field": "timestamp", "search": "", "indexed": true, "compoundHead": false, "valid": true, "method": "above", "caseSensitive": true, "includeBounds": false, "empty": [ "undefined", "null" ] }
+      { "field": "artist_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "track_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "album_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "album_artist_name", "search": "", "indexed": true, "valid": true, "method": "startswith", "caseSensitive": false, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: false,  datespan: false },
+      { "field": "timestamp", "search": "", "indexed": true, "valid": true, "method": "above", "caseSensitive": true, "includeBounds": false, "empty": [ "undefined", "null" ], datepicker: 'date',  datespan: 'day' }
     ]
   }
 ];

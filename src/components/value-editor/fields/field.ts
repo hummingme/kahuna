@@ -3,39 +3,42 @@
  * SPDX-FileCopyrightText: 2026 Lutz Brückner <dev@kahuna.rocks>
  */
 
-import { html, type TemplateResult } from 'lit-html';
-import { createRef, type Ref } from 'lit/directives/ref.js';
+import { html, nothing, render, type TemplateResult } from 'lit-html';
+import { ref } from 'lit/directives/ref.js';
 
 import CodeareaInput from '#components/value-editor/codearea-input';
-import TextareaInput, {
-    type TextareaInputSettings,
-} from '#components/value-editor/textarea-input';
+import FlexInput, {
+    type FlexInputSettings,
+    type FlexInputElement,
+    isFlexInputNode,
+} from '#components/value-editor/flex-input';
 import UploadInput from '#components/value-editor/upload-input';
-import type { RequiredVariables } from '#components/js-codearea';
-import BehaviorConfig from '#components/config/behavior-config';
+import { focusForceVisible } from '#components/value-editor/view-utils';
+import { FieldFormatterManager } from '#components/value-editor/fields/field-formatter-manager';
+import { FieldSettingsManager } from '#components/value-editor/fields/field-settings-manager';
 import type { Charset, EncodableCharset } from '#lib/charsets';
 import {
     type FieldInputMethod,
     type FieldUploadMethod,
     fieldUploadMethods,
     inputMethods,
+    noValueLabelId,
     preferedInputMethod,
-    itemsPerLine,
 } from '#lib/datatype-attributes';
 import { getType } from '#lib/datatypes';
-import settings from '#lib/settings';
+import { unescapeString } from '#lib/escape-string';
 import {
     type AllowedType,
     ValueFormatter,
-    formatterOptions,
     type FormatterOptions,
 } from '#lib/value-formatter';
-import { AppTarget } from '#types';
+import { AppTarget, ColumnFormat, DatepickerType, RequiredVariables } from '#types';
 
 export type ValueFieldArgs = {
     type: AllowedType;
     value: unknown;
     absent: boolean;
+    columnFormat: ColumnFormat;
     fieldName: string;
     selectorFields: string[];
     target: AppTarget;
@@ -44,26 +47,25 @@ export type ValueFieldArgs = {
 type ValueFieldState = ValueFieldArgs & {
     inputMethod: FieldInputMethod;
     uploadCharset: Charset;
-    defaultUploadCharset: Charset;
     downloadCharset: EncodableCharset;
-    defaultDownloadCharset: EncodableCharset;
+    datepickerType: DatepickerType | null;
     valid: boolean;
-    formOptions: FormatterOptions;
-    codeOptions: FormatterOptions;
 };
 
 export type FieldSettings = {
     inputMethod: FieldInputMethod;
     uploadCharset: Charset;
     downloadCharset: EncodableCharset;
-    textarea: TextareaInputSettings;
-    formOptions: FormatterOptions;
-    codeOptions: FormatterOptions;
+    useLocalTimezone: boolean;
+    datepickerType: DatepickerType | null;
+    flexInput: FlexInputSettings;
+    formOptions: Partial<FormatterOptions>;
+    codeOptions: Partial<FormatterOptions>;
 };
 
 export type UpdateOptions = {
-    rerenderTextarea?: boolean;
-    updateTextarea?: boolean;
+    rerenderFlexInput?: boolean;
+    updateFlexInput?: boolean;
     updateCodearea?: boolean;
 };
 
@@ -71,41 +73,50 @@ const state = Symbol('value-field state');
 
 export default abstract class Field {
     [state]: ValueFieldState;
-    node: Ref<HTMLElement> = createRef();
-    textarea?: TextareaInput;
+    nodeInput?: FlexInputElement;
+    nodeForm?: HTMLDivElement;
+    flexInput?: FlexInput;
     codearea?: CodeareaInput;
     stringFormatter = new ValueFormatter('string');
     sourceFormatter = new ValueFormatter('source');
+    protected formatterMgr: FieldFormatterManager;
+    protected settingsMgr: FieldSettingsManager;
     constructor(args: ValueFieldArgs) {
         this[state] = {
             ...args,
             valid: true,
             inputMethod: preferedInputMethod(args.type),
             uploadCharset: 'utf-8',
-            defaultUploadCharset: 'utf-8',
             downloadCharset: 'utf-8',
-            defaultDownloadCharset: 'utf-8',
-            formOptions: formatterOptions(),
-            codeOptions: formatterOptions(),
+            datepickerType: 'datetime',
         };
+        this.formatterMgr = new FieldFormatterManager(
+            args.type,
+            () => this.defaultOptionsOverrides,
+        );
+        this.settingsMgr = new FieldSettingsManager(args, this.formatterMgr);
     }
     async init(requireVariables: () => RequiredVariables) {
-        const { value, type, fieldName, selectorFields, target } = this[state];
-        this.value = value;
-        const {
-            values: { uploadCharset, downloadCharset },
-        } = await BehaviorConfig.getSettings(target);
-        this[state].defaultUploadCharset = uploadCharset;
-        this[state].defaultDownloadCharset = downloadCharset;
+        const { type, fieldName, selectorFields, target } = this[state];
+        this.value = this[state].value;
 
-        const settings = await this.getSettings();
+        const settings = await this.settingsMgr.load();
         if (inputMethods(type).includes(settings.inputMethod)) {
             this[state].inputMethod = settings.inputMethod;
         }
         this[state].uploadCharset = settings.uploadCharset;
         this[state].downloadCharset = settings.downloadCharset;
-        this[state].formOptions = settings.formOptions;
-        this[state].codeOptions = settings.codeOptions;
+        this[state].datepickerType = settings.datepickerType;
+
+        this.formatterMgr.setOptions('form', {
+            ...(settings.formOptions && { ...settings.formOptions }),
+            useLocalTimezone: settings.useLocalTimezone,
+        });
+        this.formatterMgr.setOptions('code', {
+            ...(settings.codeOptions && { ...settings.codeOptions }),
+            ...(this.isVeryLargeValue() && { compacted: true }),
+            useLocalTimezone: settings.useLocalTimezone,
+        });
 
         this.codearea = new CodeareaInput(this);
         await this.codearea.init({
@@ -114,21 +125,24 @@ export default abstract class Field {
             selectorFields,
             requireVariables: this.addValueVariable(requireVariables),
         });
-        this.textarea = this.createTextareaInput(settings.textarea);
+        this.flexInput = this.createFlexInput(settings.flexInput);
     }
     get state() {
         return this[state];
     }
-    abstract view(): TemplateResult | string;
+    view(): TemplateResult | string {
+        return html`
+            <div class="value-controls" ${ref(this.formReady.bind(this))}></div>
+            ${this.inputMethodView()}
+        `;
+    }
+    abstract formView(): TemplateResult | string;
     abstract get value(): unknown;
     abstract set value(value: unknown);
-
     /* returns the representation of the value as required for the form fields */
-    abstract toFormValue(expanded?: boolean): string | void;
-
+    abstract toFormValue(): string | void;
     /* returns value from the form elements */
     abstract fromFormValue(): unknown;
-
     update(value: unknown, options: UpdateOptions = {}) {
         this.value = value;
         this.updateFormFieldValue(options);
@@ -137,18 +151,18 @@ export default abstract class Field {
         return this.stringFormatter.render(str, 'string', this.formOptions());
     }
     updateFormFieldValue({
-        rerenderTextarea = true,
-        updateTextarea = true,
+        rerenderFlexInput = true,
+        updateFlexInput = true,
         updateCodearea = true,
     }: UpdateOptions = {}) {
-        const node = this.node.value;
-        if (node && 'value' in node) {
+        const node = this.nodeInput;
+        if (node) {
             const fieldValue = this.toFormValue() || '';
-            if (node instanceof HTMLTextAreaElement && this.textarea) {
-                if (rerenderTextarea) {
-                    this.textarea.renderTextarea(fieldValue);
-                } else if (updateTextarea) {
-                    this.textarea.node.value = fieldValue;
+            if (this.flexInput && isFlexInputNode(node)) {
+                if (rerenderFlexInput) {
+                    this.flexInput.render(fieldValue);
+                } else if (updateFlexInput) {
+                    this.flexInput.node.value = fieldValue;
                 }
             } else {
                 node.value = fieldValue;
@@ -158,7 +172,7 @@ export default abstract class Field {
             this.codearea.updateCode();
             if (this[state].inputMethod === 'code') {
                 this.codearea.codearea.textarea.value = this.toSourceValue(
-                    this.codearea.expanded,
+                    this.codearea.compacted,
                 );
             }
         }
@@ -166,11 +180,34 @@ export default abstract class Field {
     handleFormChange() {
         if (this.valid) {
             this.update(this.fromFormValue(), {
-                rerenderTextarea: false,
-                updateTextarea: false,
+                rerenderFlexInput: false,
+                updateFlexInput: false,
+                updateCodearea: false,
             });
         }
     }
+    formReady(node?: Element) {
+        if (node instanceof HTMLDivElement) {
+            this.nodeForm = node;
+            this.updateForm();
+        }
+    }
+    updateForm() {
+        const node = this.nodeForm;
+        if (!node) return;
+        render(
+            html`
+                <div class="value">${this.formView()}</div>
+            `,
+            node,
+        );
+    }
+    setNodeInput = (node?: Element) => {
+        if (node instanceof HTMLInputElement) {
+            this.nodeInput = node;
+            node.setCustomValidity('');
+        }
+    };
     set valid(result: boolean) {
         this.state.valid = result;
     }
@@ -180,14 +217,30 @@ export default abstract class Field {
     shutdown() {
         this.codearea?.shutdown();
     }
-    focus() {
-        this.node.value?.focus();
+    focus(node?: HTMLInputElement) {
+        const nodeInput = node || this.nodeInput;
+        const nodeForm = this.nodeForm?.parentElement;
+        if (nodeInput && this.usesFormInput()) {
+            requestAnimationFrame(() => nodeInput.focus());
+        } else if (nodeForm && this.usesUploadInput()) {
+            requestAnimationFrame(() =>
+                focusForceVisible(
+                    nodeForm.querySelector<HTMLButtonElement>('button.upload'),
+                ),
+            );
+        }
     }
     get inputMethod() {
         return this[state].inputMethod;
     }
     set inputMethod(method: FieldInputMethod) {
         this[state].inputMethod = method;
+    }
+    usesFormInput() {
+        return ['form', 'ts', 'ts/1000'].includes(this.inputMethod);
+    }
+    usesUploadInput() {
+        return fieldUploadMethods.includes(this.inputMethod as FieldUploadMethod);
     }
     get uploadCharset() {
         return this[state].uploadCharset;
@@ -201,31 +254,45 @@ export default abstract class Field {
     set downloadCharset(charset: EncodableCharset) {
         this[state].downloadCharset = charset;
     }
+    get datepickerType() {
+        return this[state].datepickerType;
+    }
+    set datepickerType(type: DatepickerType | null) {
+        this[state].datepickerType = type;
+    }
     inputMethodView() {
         let view: TemplateResult | '' = '';
+        let label: TemplateResult | '' = '';
         const inputMethod = this[state].inputMethod;
         if (!inputMethod) return '';
         if (fieldUploadMethods.includes(inputMethod as FieldUploadMethod)) {
             const input = new UploadInput(this);
             view = input.view();
+            label = html`
+                <label for="value-upload">upload</label>
+            `;
         } else if (inputMethod === 'code' && this.codearea) {
             if (this.codearea.isEmpty()) {
                 this.codearea.updateCode();
             }
-            view = this.codearea.view() || '';
+            view = this.codearea.view();
+            label = html`
+                <label for="js-codearea">code</label>
+            `;
         }
         return view
             ? html`
-                  <div class="value">${view}</div>
+                  ${label}
+                  <div class="input-method-controls">${view}</div>
               `
-            : '';
+            : nothing;
     }
-    toSourceValue(expanded = true) {
-        if (!expanded) return 'return value;';
+    toSourceValue(compacted = false) {
+        if (compacted) return 'return value;';
         const code = this.sourceFormatter.render(
             this.value,
             getType(this.value),
-            this.codeOptions({ expanded }),
+            this.codeOptions({ compacted }),
         );
         return `return ${code};`;
     }
@@ -237,106 +304,71 @@ export default abstract class Field {
             return Object.assign(requireVariables(), { value: this.value });
         };
     }
-    async getSettings(): Promise<FieldSettings> {
-        const { fieldName, target, type } = this[state];
-        const values: Partial<FieldSettings> = await settings.get({
-            ...target,
-            subject: 'editorfield',
-            detail: `${fieldName}~${type}`,
-        });
-        const formOptions = values.formOptions
-            ? settings.cleanupSettings(values.formOptions, this.defaultValueOptions())
-            : {};
-        const codeOptions = values.codeOptions
-            ? settings.cleanupSettings(values.codeOptions, this.defaultValueOptions())
-            : {};
-        return {
-            ...this.defaultSettings(),
-            ...values,
-            formOptions: {
-                ...this.defaultValueOptions(),
-                ...formOptions,
-            },
-            codeOptions: {
-                ...this.defaultValueOptions(),
-                ...codeOptions,
-            },
-        };
-    }
-    defaultSettings(): FieldSettings {
-        const { type, defaultUploadCharset, defaultDownloadCharset } = this[state];
-        return {
-            inputMethod: preferedInputMethod(type),
-            uploadCharset: defaultUploadCharset,
-            downloadCharset: defaultDownloadCharset,
-            textarea: { width: '25em', height: '1lh' },
-            formOptions: this.defaultValueOptions(),
-            codeOptions: this.defaultValueOptions(),
-        };
-    }
-    defaultValueOptions(): FormatterOptions {
-        return { ...formatterOptions(), perLine: itemsPerLine(this.state.type) };
-    }
+    defaultOptionsOverrides: Partial<FormatterOptions> = {};
     updateOptions(usage: 'form' | 'code', options: Partial<FormatterOptions>) {
-        const key = usage === 'form' ? 'formOptions' : 'codeOptions';
-        this.state[key] = { ...this.state[key], ...options };
+        this.formatterMgr.setOptions(usage, options);
         this.saveSettings();
+
+        const rerenderFlexInput =
+            (usage === 'form' && 'compacted' in options) ||
+            'escapeLf' in options ||
+            'escapeCr' in options
+                ? true
+                : false;
+
         this.updateFormFieldValue({
-            rerenderTextarea: usage === 'form' && 'expanded' in options ? true : false,
-            [usage === 'form' ? 'updateCodearea' : 'updateTextarea']: false,
+            rerenderFlexInput,
+            [usage === 'form' ? 'updateCodearea' : 'updateFlexInput']: false,
         });
     }
     saveSettings() {
-        const textareaStyle = this.node.value?.style;
-        const values: Partial<FieldSettings> = {
+        const textareaStyle = this.flexInput?.isTextarea && this.flexInput.node.style;
+        const currentSettings: Partial<FieldSettings> = {
             inputMethod: this.inputMethod,
             uploadCharset: this.uploadCharset,
             downloadCharset: this.downloadCharset,
+            datepickerType: this.datepickerType,
             ...(textareaStyle && {
-                textarea: {
-                    width: textareaStyle.width,
-                    height: textareaStyle.height,
+                flexInput: {
+                    textarea: {
+                        width: textareaStyle.width,
+                        height: textareaStyle.height,
+                    },
                 },
             }),
-            formOptions: this.state.formOptions,
-            codeOptions: this.state.codeOptions,
+            formOptions: this.formatterMgr.getVariableFormOptions(),
+            codeOptions: this.formatterMgr.getVariableCodeOptions(),
         };
-        const { fieldName, target, type } = this[state];
-        settings.saveSettings(
-            values,
-            this.defaultSettings(),
-            target,
-            'editorfield',
-            `${fieldName}~${type}`,
-        );
+        this.settingsMgr.save(currentSettings);
     }
     formOptions(options: Partial<FormatterOptions> = {}): FormatterOptions {
-        return this.formatterOptions('form', options);
+        return this.formatterMgr.getFormOptions(options);
     }
     codeOptions(options: Partial<FormatterOptions> = {}): FormatterOptions {
-        return this.formatterOptions('code', options);
+        return this.formatterMgr.getCodeOptions(options);
     }
-    formatterOptions(
-        usage: 'form' | 'code',
-        options: Partial<FormatterOptions> = {},
-    ): FormatterOptions {
-        const key = usage === 'form' ? 'formOptions' : 'codeOptions';
-        return { ...this.state[key], ...options };
-    }
-    createTextareaInput(settings: TextareaInputSettings) {
-        const invalidTextareaHint =
-            'invalidTextareaHint' in this && typeof this.invalidTextareaHint === 'string'
-                ? this.invalidTextareaHint
-                : 'Invalid input!';
-        const validateTextareaValue =
-            'validateTextareaValue' in this &&
-            this.validateTextareaValue instanceof Function
-                ? this.validateTextareaValue
-                : () => true;
-        return new TextareaInput(this, {
+    createFlexInput(settings: FlexInputSettings) {
+        return new FlexInput(this, {
             ...settings,
-            validCheck: validateTextareaValue.bind(this),
-            invalidHint: invalidTextareaHint,
+            validCheck: this.validCheck(),
+            invalidHint: this.invalidHint,
         });
+    }
+    validCheck(): (val: string) => boolean {
+        return 'validate' in this && this.validate instanceof Function
+            ? this.validate.bind(this)
+            : () => true;
+    }
+    invalidHint = 'Invalid input!';
+    valueInputId(ext = '') {
+        const { type, target } = this.state;
+        const table = unescapeString(target.table);
+        return `field-value-${table}-${type}${ext ? `-${ext}` : ''}`;
+    }
+    valueLabelId(): string | undefined {
+        return noValueLabelId(this[state].type) ? undefined : this.valueInputId();
+    }
+    isVeryLargeValue(): boolean {
+        return false;
     }
 }

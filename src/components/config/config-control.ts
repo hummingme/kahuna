@@ -13,14 +13,14 @@ import ColumnsConfig from './columns-config';
 import ExportConfig from './export-config';
 import FiltersConfig from './filters-config';
 import ImportConfig from './import-config';
-import type { AllOptions, ConfigRealm } from './types';
+import type { AllOptions } from './types';
 import configLayer from '#components/configlayer';
 import tooltip from '#components/tooltip';
+import svgIcon from '#components/parts/svgicon';
 import appStore from '#lib/app-store';
+import { print } from '#lib/escape-string';
 import messenger from '#lib/messenger';
 import { globalTarget, isGlobal, isDatabase, isTable } from '#lib/app-target';
-import svgIcon from '#lib/svgicon';
-import { hasIntersection } from '#lib/utils';
 import { AppTarget } from '#types';
 
 export type ConfigActor =
@@ -31,13 +31,13 @@ export type ConfigActor =
     | ExportConfig
     | ImportConfig;
 
-interface ConfigControlState {
+type ConfigControlState = {
     target: AppTarget;
     realm: ConfigRealm;
     actor?: ConfigActor;
     remembered: Map<string, Partial<AllOptions>>;
     hasChanged: Set<ConfigRealm>;
-}
+};
 type ConfigLevel = 'global' | 'database' | 'table';
 
 const state = Symbol('config-control state');
@@ -186,7 +186,7 @@ export const ConfigControl = class {
         }
         const tableRealms = new Set(['behavior', 'columns', 'filters']);
         if (
-            hasIntersection(this[state].hasChanged, tableRealms) &&
+            !tableRealms.isDisjointFrom(this[state].hasChanged) &&
             isTable(this.appTarget)
         ) {
             messenger.post({ type: 'refreshDatatable' });
@@ -237,6 +237,7 @@ export const ConfigControl = class {
     }
     headlineView() {
         const realm = this[state].realm;
+        const { table, database } = this[state].target;
         const switchIcon =
             appStore.isGlobal || (this.isTable && !isTable(this.appTarget))
                 ? ''
@@ -256,15 +257,15 @@ export const ConfigControl = class {
         } else if (this.isDatabase) {
             headline = html`
                 Settings for database
-                <i>${this[state].target.database}</i>
+                <i>${print(database)}</i>
                 and the default settings for included tables
             `;
         } else {
             headline = html`
                 Settings for table
-                <i>${this[state].target.table}</i>
+                <i>${print(table)}</i>
                 in database
-                <i>${this[state].target.database}</i>
+                <i>${print(database)}</i>
             `;
         }
         return html`
@@ -355,6 +356,8 @@ export const CONFIG_REALMS = [
     'import',
     'export',
 ] as const;
+
+export type ConfigRealm = (typeof CONFIG_REALMS)[number];
 
 let lastRealm: ConfigRealm = 'behavior'; // changed by closeHandler
 

@@ -8,12 +8,14 @@ import { html, TemplateResult } from 'lit-html';
 import messageStack from '#components/messagestack';
 import tooltip from '#components/tooltip';
 import displayConfigControl from '#components/config/config-control';
+import { labeledSelectbox } from '#components/parts/selectbox';
+import SettingsIcon from '#components/parts/settings-icon';
+import svgIcon from '#components/parts/svgicon';
 import appStore from '#lib/app-store';
+import { EXPORT_IMPORT_AVAILABLE } from '#lib/constants';
 import { isPrimKeyUnnamed } from '#lib/dexie-utils';
 import messenger from '#lib/messenger';
-import { labeledSelectbox } from '#lib/selectbox';
 import settings from '#lib/settings';
-import svgIcon from '#lib/svgicon';
 import { capitalize, selfMap, sleep } from '#lib/utils';
 import type { AppTarget, ExportFormat, KTable, PlainObject } from '#types';
 
@@ -72,7 +74,7 @@ const ImporterExporter = class {
             displayConfigControl({
                 target,
                 realm,
-                anchorId: 'settings-config',
+                anchorId: SettingsIcon.settingsButtonId,
             });
         };
         return html`
@@ -111,7 +113,7 @@ const ImporterExporter = class {
         return this.settingInfo('primary key name', primaryKeyName, annotateFunc(usage));
     }
     hasPkNameInput(format: string, source: KTable | KTable[]): boolean {
-        if (['json', 'csv'].includes(format)) {
+        if (format === 'json' || format === 'csv') {
             if (Array.isArray(source)) {
                 return source.some((table: KTable) => isPrimKeyUnnamed(table.primKey));
             } else {
@@ -146,9 +148,7 @@ const ImporterExporter = class {
         }
     }
     get checkInjectedLoaded() {
-        return document.documentElement.hasAttribute(
-            'data-kahuna-export-import-available',
-        );
+        return document.documentElement.hasAttribute(EXPORT_IMPORT_AVAILABLE);
     }
     handleError(error: Error) {
         if (appStore.loading) {

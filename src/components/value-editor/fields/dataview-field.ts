@@ -10,9 +10,14 @@ import ArraybufferField from '#components/value-editor/fields/arraybuffer-field'
 import Field, { type UpdateOptions } from '#components/value-editor/fields/field';
 import textInput from '#components/value-editor/text-input';
 import { validatePositiveInteger } from '#components/value-editor/validations';
-import type { RequiredVariables } from '#components/js-codearea';
 import { isArrayBuffer, isDataView, isTypedArray } from '#lib/datatypes';
 import { isLarge } from '#lib/datatype-attributes';
+import {
+    BUFFER_MAX_LENGTH,
+    RememberedValue,
+    RequiredVariables,
+    VERY_LARGE_VALUE,
+} from '#types';
 
 export default class DataviewField extends Field {
     nodeBufferLength: Ref<HTMLInputElement> = createRef();
@@ -30,38 +35,36 @@ export default class DataviewField extends Field {
             this.buffer = this.value.buffer;
         }
     }
-    view() {
+    formView() {
         const { buffer, byteLength, byteOffset } = this.value;
+        const commonAttributes = {
+            type: 'number',
+            min: 0,
+            max: BUFFER_MAX_LENGTH,
+            style: 'width: 13ch;',
+        };
         return html`
-            <div class="value-controls">
-                <div class="value">
-                    ${textInput(this, {
-                        id: 'bufferlength',
-                        '.value': String(buffer.byteLength),
-                        size: 11,
-                        maxLength: 12,
-                        label: 'bufferLength',
-                        refVar: this.nodeBufferLength,
-                    })}
-                    ${textInput(this, {
-                        id: 'byteoffset',
-                        '.value': String(byteOffset),
-                        size: 11,
-                        maxLength: 12,
-                        label: 'byteOffset',
-                        refVar: this.nodeByteOffset,
-                    })}
-                    ${textInput(this, {
-                        id: 'bytelength',
-                        '.value': String(byteLength),
-                        size: 11,
-                        maxLength: 12,
-                        label: 'byteLength',
-                        refVar: this.nodeByteLength,
-                    })}
-                </div>
-                ${this.inputMethodView()}
-            </div>
+            ${textInput(this, {
+                ...commonAttributes,
+                id: this.valueInputId('bufferlength'),
+                '.value': String(buffer.byteLength),
+                label: 'bufferLength',
+                refVar: this.nodeBufferLength,
+            })}
+            ${textInput(this, {
+                ...commonAttributes,
+                id: this.valueInputId('byteoffset'),
+                '.value': String(byteOffset),
+                label: 'byteOffset',
+                refVar: this.nodeByteOffset,
+            })}
+            ${textInput(this, {
+                ...commonAttributes,
+                id: this.valueInputId('bytelength'),
+                '.value': String(byteLength),
+                label: 'byteLength',
+                refVar: this.nodeByteLength,
+            })}
         `;
     }
     get value(): DataView {
@@ -94,6 +97,25 @@ export default class DataviewField extends Field {
         }
     }
     fromFormValue(): DataView | undefined {
+        const fieldValues = this.valuesFromForm();
+        if (!fieldValues) return;
+
+        const { bufferLength, byteOffset, byteLength } = fieldValues;
+        let buffer = this.buffer;
+        if (bufferLength !== this.buffer.byteLength) {
+            buffer = new ArrayBuffer(bufferLength);
+            const newView = new DataView(buffer);
+            const oldView = new DataView(this.buffer);
+            for (let i = 0; i < bufferLength; i++) {
+                const byte = i < this.buffer.byteLength ? oldView.getUint8(i) : 0;
+                newView.setUint8(i, byte);
+            }
+        }
+        return new DataView(buffer, byteOffset, byteLength);
+    }
+    valuesFromForm():
+        | { bufferLength: number; byteOffset: number; byteLength: number }
+        | undefined {
         if (
             this.valid &&
             this.nodeBufferLength.value instanceof HTMLInputElement &&
@@ -106,24 +128,15 @@ export default class DataviewField extends Field {
                 byteOffset > 0 && this.nodeByteLength.value.value === ''
                     ? bufferLength - byteOffset
                     : Number(this.nodeByteLength.value.value);
-            let buffer = this.buffer;
-            if (bufferLength !== this.buffer.byteLength) {
-                buffer = new ArrayBuffer(bufferLength);
-                const newView = new DataView(buffer);
-                const oldView = new DataView(this.buffer);
-                for (let i = 0; i < bufferLength; i++) {
-                    const byte = i < this.buffer.byteLength ? oldView.getUint8(i) : 0;
-                    newView.setUint8(i, byte);
-                }
-            }
-            return new DataView(buffer, byteOffset, byteLength);
+            return { bufferLength, byteOffset, byteLength };
         }
     }
     validate() {
         let valid = false;
-        const bufferLength = validatePositiveInteger(this.nodeBufferLength.value);
-        const byteOffset = validatePositiveInteger(this.nodeByteOffset.value);
-        const byteLength = validatePositiveInteger(this.nodeByteLength.value);
+        const opts = { max: BUFFER_MAX_LENGTH };
+        const bufferLength = validatePositiveInteger(this.nodeBufferLength.value, opts);
+        const byteOffset = validatePositiveInteger(this.nodeByteOffset.value, opts);
+        const byteLength = validatePositiveInteger(this.nodeByteLength.value, opts);
         if (
             typeof bufferLength === 'number' &&
             typeof byteOffset === 'number' &&
@@ -145,6 +158,20 @@ export default class DataviewField extends Field {
         }
         this.valid = valid;
     }
+    valueChanged(remembered: RememberedValue) {
+        const oldValue = remembered.value;
+        if (!(oldValue instanceof DataView)) return true;
+
+        const fieldValues = this.valuesFromForm();
+        if (!fieldValues) return;
+
+        const { bufferLength, byteOffset, byteLength } = fieldValues;
+        return (
+            bufferLength !== oldValue.buffer.byteLength ||
+            byteOffset !== oldValue.byteOffset ||
+            byteLength !== oldValue.byteLength
+        );
+    }
     override update(value: DataView, options?: UpdateOptions) {
         super.update(value, options);
         this.toFormValue();
@@ -152,13 +179,15 @@ export default class DataviewField extends Field {
     override async handleUploadedValue(file: File) {
         const blob = new Blob([file], { type: file.type });
         this.buffer = await blob.arrayBuffer();
-        this.state.codeOptions.expanded = this.buffer.byteLength < isLarge('dataview');
+        this.formatterMgr.setOptions('code', {
+            compacted: this.buffer.byteLength >= isLarge('dataview'),
+        });
         this.update(new DataView(this.buffer));
     }
-    override toSourceValue(expanded: boolean): string {
-        if (!expanded) return 'return value;';
+    override toSourceValue(compacted: boolean): string {
+        if (compacted) return 'return value;';
         const value = this.value;
-        const options = this.formOptions({ expanded });
+        const options = this.formOptions({ compacted });
         const func = ArraybufferField.sourceFunction(value.buffer, options);
         const param_str =
             value.byteLength !== value.buffer.byteLength
@@ -170,5 +199,11 @@ ${func}`;
     }
     isLarge() {
         return this.value.byteLength > isLarge(this.state.type);
+    }
+    override focus(): void {
+        super.focus(this.nodeBufferLength.value);
+    }
+    override isVeryLargeValue(): boolean {
+        return this.value.buffer.byteLength >= VERY_LARGE_VALUE;
     }
 }

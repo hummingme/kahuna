@@ -5,32 +5,31 @@
 
 import type { Table } from 'dexie';
 import { nothing } from 'lit';
-import { html } from 'lit-html';
+import { html, TemplateResult } from 'lit-html';
 import { map } from 'lit/directives/map.js';
 
 import FiltersConfig from '#components/config/filters-config';
 import type { ControlInstance } from '#components/config/types';
 import datatable from '#components/datatable';
-import { isTable } from '#lib/app-target';
-import { symbolButton } from '#lib/button';
-import checkbox from '#lib/checkbox';
-import { type Column } from '#lib/column';
+import { symbolButton } from '#components/parts/button';
+import checkbox from '#components/parts/checkbox';
+import { selectbox } from '#components/parts/selectbox';
 import { getConnection } from '#lib/connection';
-import { isEmptyObject } from '#lib/datatypes';
+import { getType } from '#lib/datatypes';
+import { datepickerTypeOptions, isDatepickerTypeOption } from '#lib/datepicker-types';
 import {
+    datespan,
+    datespanLabel,
     defaultFilterOptions,
     emptyFilter,
     initialFilter,
     searchMethods,
 } from '#lib/filter';
-import { selectbox } from '#lib/selectbox';
 import settings from '#lib/settings';
-import { capitalize, pickByKeys } from '#lib/utils';
-import type { AppTarget } from '#types/common';
+import { capitalize, pickByKeys, selfMap } from '#lib/utils';
+import type { AppTarget, Column, DatepickerType } from '#types';
 import {
     caseSensitiveMethods,
-    compoundHeadIndexedMethods,
-    CompoundHeadIndexedMethod,
     indexedMethods,
     type Filter,
     type FilterDefaultOptions,
@@ -38,6 +37,7 @@ import {
     type FilterMethod,
     type IndexedMethod,
 } from '#types/filter';
+import { parseSearchDate, toDatepickerValue } from '#lib/datepicker-search';
 
 type FilterFieldsConfigState = {
     filters: Filter[];
@@ -46,6 +46,7 @@ type FilterFieldsConfigState = {
     rememberedOptions: FilterDefaultOptions[][];
     markUnindexed: boolean;
     dexieTable: Table | null;
+    hasDateValues: Set<string>;
 };
 
 type ConfigInstance = InstanceType<typeof FiltersConfig>;
@@ -64,18 +65,22 @@ const FilterFieldsConfig = class {
         filtersConfig = filtersConfigInstance;
         this.#remembered = control.remembered;
         if (control.isTable) {
-            const { filters, columns, dexieTable } = isTable(control.appTarget)
-                ? (datatable.state as {
-                      filters: Filter[];
-                      columns: Column[];
-                      dexieTable: Table;
-                  })
-                : await this.initFromSettings(control.target);
+            const target = control.target;
+            const { filters, columns, data } = datatable.state;
             const { filtersBefore, rememberedOptions } = this.initRemembered({
                 filters,
                 columns,
                 remembered: control.remembered,
             });
+            const hasDateValues: Set<string> = new Set();
+            data.forEach((_, idx) => {
+                for (const key of Object.keys(data[idx])) {
+                    if (getType(data[idx][key]) === 'date') {
+                        hasDateValues.add(key);
+                    }
+                }
+            });
+            const dexieTable = (await getConnection(target.database)).table(target.table);
             this[state] = {
                 filters: structuredClone(filters),
                 columns: [...columns],
@@ -83,6 +88,7 @@ const FilterFieldsConfig = class {
                 rememberedOptions,
                 markUnindexed: false,
                 dexieTable,
+                hasDateValues,
             };
             if (columns.length > 0) {
                 this.#initialFilter = initialFilter(columns, dexieTable);
@@ -97,24 +103,8 @@ const FilterFieldsConfig = class {
             rememberedOptions: [],
             markUnindexed: false,
             dexieTable: null,
+            hasDateValues: new Set<string>(),
         };
-    }
-    async initFromSettings(target: AppTarget) {
-        const columnValues = (await settings.get({
-            ...target,
-            subject: 'columns',
-        })) as Column[];
-        const columns = !isEmptyObject(columnValues) ? columnValues : ([] as Column[]);
-        const columnNames = columns.map((c) => c.name);
-        const filterValues = await settings.get({
-            ...target,
-            subject: 'filters',
-        });
-        const filters = (!isEmptyObject(filterValues) ? filterValues : []).filter((f) =>
-            columnNames.includes(f.field),
-        );
-        const dexieTable = (await getConnection(target.database)).table(target.table);
-        return { filters, columns, dexieTable };
     }
     initRemembered({
         filters,
@@ -230,19 +220,11 @@ const FilterFieldsConfig = class {
             '@change': this.fieldChanged.bind(this, idx),
             options,
             selected,
-            class:
-                this[state].markUnindexed && !filter.indexed && !filter.compoundHead
-                    ? 'warn'
-                    : null,
+            class: this[state].markUnindexed && !filter.indexed ? 'warn' : null,
         });
     }
     methodSelect(filter: Filter, idx: number) {
-        const isIndexedMethod =
-            indexedMethods.includes(filter.method as IndexedMethod) &&
-            (!filter.compoundHead ||
-                compoundHeadIndexedMethods.includes(
-                    filter.method as CompoundHeadIndexedMethod,
-                ));
+        const isIndexedMethod = indexedMethods.includes(filter.method as IndexedMethod);
         return selectbox({
             name: 'method-' + idx,
             '@change': this.methodChanged.bind(this, idx),
@@ -252,8 +234,11 @@ const FilterFieldsConfig = class {
         });
     }
     methodOptions(filter: Filter) {
-        const { field, includeBounds, caseSensitive } = filter;
-        const primKey = (this[state].dexieTable as Table).schema.primKey;
+        if (!this[state].dexieTable) {
+            throw 'Cannot initialize methodOptions!';
+        }
+        const { field, includeBounds, caseSensitive, datepicker } = filter;
+        const primKey = this[state].dexieTable.schema.primKey;
         const options = Object.fromEntries(
             Object.entries(searchMethods()).map((m) => {
                 let val: string =
@@ -266,11 +251,16 @@ const FilterFieldsConfig = class {
         );
         if (
             field === '*key*' ||
-            (primKey.name === field && typeof primKey.keyPath === 'string')
+            (primKey.name === field && typeof primKey.keyPath === 'string') ||
+            datepicker
         ) {
             delete options['empty'];
         }
-        if (field === '*key*' || (primKey.name === field && primKey.auto === true)) {
+        if (
+            field === '*key*' ||
+            (primKey.name === field && primKey.auto === true) ||
+            datepicker
+        ) {
             for (const name of ['startswith', 'endswith', 'contains', 'regexp']) {
                 delete options[name];
             }
@@ -279,10 +269,18 @@ const FilterFieldsConfig = class {
     }
     optionCheckboxes(filter: Filter, idx: number) {
         const checkboxes = [];
+        if (this.shouldHaveDatepickerOption(filter)) {
+            checkboxes.push(
+                this.optionCheckbox('datepicker', this.optionDatepickerLabel(idx), idx),
+            );
+        }
+        if (this.shouldHaveSpanOption(filter)) {
+            checkboxes.push(this.optionCheckbox('datespan', datespanLabel(filter), idx));
+        }
         for (const checkbox of this.relatedOptionCheckboxes(filter)) {
             checkboxes.push(
                 this.optionCheckbox(
-                    ...(checkbox as [keyof FilterDefaultOptions, string, string]),
+                    ...(checkbox as [keyof FilterDefaultOptions, string]),
                     idx,
                 ),
             );
@@ -297,25 +295,43 @@ const FilterFieldsConfig = class {
         return checkboxes;
     }
     relatedOptionCheckboxes(filter: Filter) {
-        const { field, method, caseSensitive } = filter;
-        if (field !== '*key*' && caseSensitiveMethods.includes(method)) {
-            const className =
-                this[state].markUnindexed &&
-                !caseSensitive &&
-                !['equal', 'startswith'].includes(method)
-                    ? 'warn'
-                    : null;
-            return [['caseSensitive', 'case sensitive', className]];
+        const { field, method } = filter;
+        if (
+            field !== '*key*' &&
+            !filter.datepicker &&
+            caseSensitiveMethods.includes(method)
+        ) {
+            return [['caseSensitive', 'case sensitive']];
         }
         if (['below', 'above'].includes(method)) {
-            return [['includeBounds', 'include bounds', null]];
+            return [['includeBounds', 'include bounds']];
         }
         return [];
     }
+    shouldHaveDatepickerOption(filter: Filter) {
+        if (filter.method === 'empty' || filter.method === 'regexp') return false;
+        return (
+            filter.datepicker !== false ||
+            this[state].hasDateValues.has(filter.field) ||
+            this.isFilterColumnDateFormatted(filter)
+        );
+    }
+    shouldHaveSpanOption(filter: Filter) {
+        return (
+            this.shouldHaveDatepickerOption(filter) &&
+            (filter.method === 'equal' || filter.method === 'notequal') &&
+            ['year', 'month', 'date'].includes(filter.datepicker as string)
+        );
+    }
+    isFilterColumnDateFormatted(filter: Filter) {
+        const format = this[state].columns.find(
+            (column) => column.name === filter.field,
+        )?.format;
+        return format === 'date' || format === 'date/1000';
+    }
     optionCheckbox(
         name: keyof FilterDefaultOptions,
-        label: string,
-        className: string | null,
+        label: string | TemplateResult,
         idx: number,
     ) {
         const checked = !!this[state].filters[idx][name];
@@ -323,7 +339,7 @@ const FilterFieldsConfig = class {
             name,
             label,
             checked,
-            class: className,
+            liveValue: true,
             '@change': this.checkboxChanged.bind(this, idx, name),
         });
     }
@@ -335,6 +351,47 @@ const FilterFieldsConfig = class {
             checked: this[state].filters[idx].empty.includes(check),
             '@change': this.checkboxChanged.bind(this, idx, name),
         });
+    }
+    optionDatepickerLabel(idx: number) {
+        const filter = this[state].filters[idx];
+        if (!filter || filter.datepicker === false) return 'use datepicker';
+
+        const format = this[state].columns.find(
+            (column) => column.name === filter.field,
+        )?.format;
+        const options = datepickerTypeOptions.filter(
+            (option) => format !== 'date/1000' || option !== 'millisecond',
+        );
+        const sb = selectbox({
+            name: `datpicker-type-${idx}`,
+            options: selfMap(options),
+            selected: String(filter.datepicker),
+            '@change': this.datepickerTypeChanged.bind(this, idx),
+            class: 'aright',
+        });
+        return html`
+            use ${sb}-picker
+        `;
+    }
+    datepickerTypeChanged(idx: number, event: Event) {
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement)) return;
+
+        const option = target.value as DatepickerType;
+        if (!isDatepickerTypeOption(option)) return;
+
+        const filter = this[state].filters[idx];
+        filter.datepicker = option;
+        if (filter.datespan) {
+            filter.datespan = datespan(filter);
+        }
+        filter.search = toDatepickerValue(
+            parseSearchDate(this[state].filtersBefore[idx].search, false),
+            option,
+            false,
+        );
+        this.updateRememberedOptions(idx);
+        this.update(this[state].filters);
     }
     addFilter(event: Event) {
         event.preventDefault();
@@ -353,7 +410,8 @@ const FilterFieldsConfig = class {
         this.update(this[state].filters);
     }
     fieldChanged(idx: number, event: Event) {
-        const target = event.target as HTMLInputElement;
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement)) return;
         const columns = this[state].columns;
         const columnIndex = parseInt(target.value);
         const remembered = this[state].rememberedOptions[idx][columnIndex];
@@ -362,23 +420,32 @@ const FilterFieldsConfig = class {
             {
                 field: columns[columnIndex].name,
                 indexed: columns[columnIndex].indexed,
-                compoundHead: columns[columnIndex].compoundHead,
             },
             remembered,
         );
         this.update(this[state].filters);
     }
     methodChanged(idx: number, event: Event) {
-        const target = event.target as HTMLInputElement;
+        const target = event.target;
+        if (!(target instanceof HTMLSelectElement)) return;
         this[state].filters[idx].method = target.value as FilterMethod;
+        if (!caseSensitiveMethods.includes(target.value)) {
+            this[state].filters[idx].caseSensitive = true;
+        }
         this.updateRememberedOptions(idx);
         this.update(this[state].filters);
     }
     checkboxChanged(idx: number, name: string, event: Event) {
-        const target = event.target as HTMLInputElement;
+        const target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
         const filter = this[state].filters[idx];
         if (name === 'caseSensitive' || name === 'includeBounds') {
             filter[name] = target.checked;
+        } else if (name === 'datepicker') {
+            filter.datepicker = target.checked ? 'date' : false;
+            filter.datespan = false;
+        } else if (name === 'datespan') {
+            filter.datespan = target.checked ? datespan(filter) : false;
         } else if (name.startsWith('empty')) {
             const emptyOption = name.substring(5).toLowerCase() as FilterEmptyMethod;
             if (
@@ -403,17 +470,19 @@ const FilterFieldsConfig = class {
             this[state].rememberedOptions[idx][columnIndex] = pickByKeys(
                 filter,
                 defaultFilterOptions(),
-            ) as FilterDefaultOptions;
+            );
         }
         this.rememberOptions();
     }
     dragStart(event: Event) {
-        const target = event.target as HTMLElement;
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
         this.#dragIndex = parseInt(target.closest('div')?.dataset.filterindex || '-1');
     }
     dragEnter(event: Event) {
         event.preventDefault();
-        const target = event.target as HTMLElement;
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
         const targetIndex = parseInt(target.closest('div')?.dataset.filterindex || '-1');
         if (targetIndex !== this.#dragIndex) {
             const filters = this[state].filters;
@@ -465,8 +534,10 @@ const FilterFieldsConfig = class {
             if (
                 filter.field !== before.field ||
                 filter.method !== before.method ||
-                filter['caseSensitive'] !== before['caseSensitive'] ||
-                filter['includeBounds'] !== before['includeBounds'] ||
+                filter.caseSensitive !== before.caseSensitive ||
+                filter.includeBounds !== before.includeBounds ||
+                filter.datepicker !== before.datepicker ||
+                filter.datespan !== before.datespan ||
                 filter.empty.length !== before.empty.length ||
                 filter.empty.every((check) => before.empty.includes(check)) === false
             ) {
@@ -503,14 +574,22 @@ const FilterFieldsConfig = class {
         const filters: Filter[] = [];
         let values = await settings.get({ ...target, subject: 'filters' });
         if (Array.isArray(values)) {
+            // remove filters for ancient search methods
             values = values.filter((filter) =>
                 Object.keys(searchMethods()).includes(filter.method),
             );
+            const empty: Filter = emptyFilter();
+            // cleanup bygone filter properties
             values.forEach((filter: Filter) => {
+                const record = filter as Record<string, unknown>;
+                for (const prop in record) {
+                    if (!Object.hasOwn(empty, prop)) {
+                        delete record[prop];
+                    }
+                }
                 const column = columns.find((column) => column.name === filter.field);
                 filter.indexed = column ? column.indexed : false;
-                filter.compoundHead = column ? column.compoundHead : false;
-                filters.push({ ...filter });
+                filters.push({ ...empty, ...filter });
             });
         }
         return filters.length > 0 ? filters : [initialFilter(columns, dexieTable)];

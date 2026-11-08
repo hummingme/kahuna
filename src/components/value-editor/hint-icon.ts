@@ -5,8 +5,8 @@
 
 import { html } from 'lit-html';
 
+import svgIcon from '#components/parts/svgicon';
 import type { FieldInputMethod } from '#lib/datatype-attributes';
-import svgIcon from '#lib/svgicon';
 
 export default function hintIcon(field: object, method: FieldInputMethod) {
     const text = hint(field, method);
